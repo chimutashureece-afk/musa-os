@@ -24,9 +24,9 @@ export function useTheme() {
   return { dark, toggle };
 }
 
-const Brand: React.FC<{ name?: string }> = ({ name }) => (
+const Brand: React.FC<{ name?: string; logo?: string }> = ({ name, logo }) => (
   <div className="flex items-center gap-3">
-    <MusaMark size={38} />
+    {logo ? <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white p-0.5"><img src={logo} alt="" className="h-full w-full object-contain" /></span> : <MusaMark size={38} />}
     <div className="min-w-0">
       <span className="line-clamp-2 block font-display text-[15px] font-bold leading-tight tracking-tight text-white">{name || 'Musa OS'}</span>
       <span className="block text-[11px] font-semibold text-white/45">Musa<span className="text-brand-400">OS</span></span>
@@ -40,7 +40,7 @@ const Sidebar: React.FC<{ onNavigate?: () => void; requests?: number }> = ({ onN
   const groups = navFor(profile!.role);
   return (
     <div className="flex h-full flex-col bg-brand-950 text-white dark:bg-ink-950">
-      <div className="px-4 pb-5 pt-5"><Brand name={settings?.name} /></div>
+      <div className="px-4 pb-5 pt-5"><Brand name={settings?.name} logo={settings?.logo} /></div>
       <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-6" aria-label="Main">
         {groups.map((g) => (
           <div key={g.label}>

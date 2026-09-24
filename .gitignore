@@ -32,3 +32,6 @@ dist-demo
 # Windows app build output
 desktop/node_modules
 desktop/release
+
+# copied from node_modules at build time
+public/tesseract

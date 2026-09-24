@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { SchoolCrest } from '../../components/SchoolCrest';
 import {
   Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
@@ -110,9 +111,7 @@ export const Paper: React.FC<{ children: React.ReactNode; className?: string }> 
 export const Letterhead: React.FC<{ settings?: SchoolSettings; title: string; compact?: boolean }> = ({ settings, title, compact }) => (
   <div className="mb-4">
     <div className={cx('flex items-center gap-4 border-b-[3px] border-double border-slate-800', compact ? 'pb-2' : 'pb-3')}>
-      <div className={cx('flex shrink-0 items-center justify-center rounded-full border-2 border-slate-800 font-display tracking-tight font-bold', compact ? 'h-12 w-12 text-lg' : 'h-16 w-16 text-2xl')}>
-        {(settings?.name ?? 'S').split(/\s+/).map((w) => w[0]).slice(0, 2).join('')}
-      </div>
+      <SchoolCrest settings={settings} size={compact ? 48 : 64} className="text-slate-800" />
       <div className="min-w-0 flex-1">
         <h1 className={cx('font-serif font-bold uppercase leading-tight tracking-wide', compact ? 'text-[19px]' : 'text-[24px]')}>{settings?.name ?? 'School'}</h1>
         {settings?.motto && !compact && <p className="font-display tracking-tight text-[13px] text-slate-700 dark:text-slate-200">“{settings.motto}”</p>}

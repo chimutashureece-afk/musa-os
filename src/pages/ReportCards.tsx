@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { SchoolCrest } from '../components/SchoolCrest';
 import { useSearchParams } from 'react-router-dom';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import {ArrowDown, ArrowUp, Award, CheckCircle2, Eye, FileText, Printer, Save, Send, PenLine, Trophy, Users, ListChecks} from 'lucide-react';
@@ -67,9 +68,7 @@ export function ReportCardDoc({ d, settings }: { d: CardData; settings?: SchoolS
     <div className="paper mx-auto w-full max-w-[210mm] bg-white p-8 font-sans text-[12px] leading-snug text-slate-900 print:max-w-none print:p-0 dark:text-white">
       {/* letterhead */}
       <div className="flex items-center gap-4 border-b-[3px] border-double border-slate-800 pb-3">
-        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-2 border-slate-800 font-display tracking-tight text-2xl font-bold">
-          {(settings?.name ?? 'S').split(/\s+/).map((w) => w[0]).slice(0, 2).join('')}
-        </div>
+        <SchoolCrest settings={settings} size={64} className="text-slate-800" />
         <div className="min-w-0 flex-1 text-center">
           <h1 className="font-serif text-[26px] font-bold uppercase leading-tight tracking-wide">{settings?.name ?? 'School'}</h1>
           {settings?.motto && <p className="font-display tracking-tight text-[13px] text-slate-700 dark:text-slate-200">“{settings.motto}”</p>}

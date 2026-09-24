@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import {Briefcase, CalendarClock, Download, GraduationCap, Mail, Pencil, Phone, Plane, School, Trash2, UserPlus, Users} from 'lucide-react';
+import {Upload, Briefcase, CalendarClock, Download, GraduationCap, Mail, Pencil, Phone, Plane, School, Trash2, UserPlus, Users} from 'lucide-react';
 import { useAuth, useSettings } from '../context/AuthContext';
 import { useCan } from '../lib/hooks';
 import { newId, store, useCollection, useIndex } from '../lib/store';
@@ -10,6 +10,7 @@ import {
   Avatar, Badge, Button, Card, EmptyState, Field, Input, Modal, PageHeader, Progress, SearchInput, Select, Spinner, StatCard, TableWrap, useUI,
 } from '../components/ui';
 import { classSort, cx, download, fmtDate, sum, toCSV, todayISO } from '../lib/utils';
+import { BulkImport, ReviewRow, downloadTemplate } from '../components/BulkImport';
 
 const TITLES = ['Mr', 'Mrs', 'Ms', 'Miss', 'Dr', 'Prof', 'Rev'];
 const STATUS: { id: StaffStatus; label: string; tone: 'green' | 'amber' | 'slate' }[] = [
@@ -25,7 +26,7 @@ const isTeaching = (s: Staff, teachingIds: Set<string>) =>
 
 const fullStaffName = (s: Staff) => `${s.title} ${s.firstName} ${s.lastName}`;
 
-function nextStaffNo(staff: Staff[]): string {
+function nextStaffNo(staff: Staff[], schoolName?: string, extra: string[] = []): string {
   const counts = new Map<string, number>();
   let max = 0;
   for (const s of staff) {
@@ -33,8 +34,9 @@ function nextStaffNo(staff: Staff[]): string {
     if (!m) continue;
     counts.set(m[1]!, (counts.get(m[1]!) ?? 0) + 1);
   }
-  const prefix = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'GFA-S';
-  for (const s of staff) if (s.staffNo?.startsWith(prefix)) max = Math.max(max, parseInt(s.staffNo.slice(prefix.length), 10) || 0);
+  const initials = (schoolName ?? 'School').split(/\s+/).filter((w) => /^[A-Za-z]/.test(w)).map((w) => w[0]!.toUpperCase()).join('').slice(0, 4) || 'SCH';
+  const prefix = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? `${initials}-S`;
+  for (const n of [...staff.map((s) => s.staffNo), ...extra]) if (n?.startsWith(prefix)) max = Math.max(max, parseInt(n.slice(prefix.length), 10) || 0);
   return `${prefix}${String(max + 1).padStart(3, '0')}`;
 }
 
@@ -55,6 +57,20 @@ export default function StaffPage() {
   const subjectIdx = useIndex('subjects');
   const canEdit = useCan('staff');
   const { toast, confirm } = useUI();
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const importRows = async (rows: ReviewRow[]) => {
+    const issued: string[] = [];
+    const docs: Staff[] = rows.map((r, i) => {
+      const staffNo = nextStaffNo(staff, settings?.name, issued); issued.push(staffNo);
+      return {
+        id: newId() + i.toString(36), staffNo, title: r.title?.trim() || (r.gender === 'M' ? 'Mr' : 'Mrs'),
+        firstName: r.firstName!.trim(), lastName: r.lastName!.trim(), gender: r.gender as Gender,
+        position: r.position?.trim() || 'Teacher', department: r.department?.trim() || '', phone: r.phone?.trim() ?? '', email: r.email?.trim() ?? '',
+        hireDate: todayISO(), status: 'active',
+      };
+    });
+    await store.commit(docs.map((d) => ({ op: 'set', col: 'staff', id: d.id, data: d as any })));
+  };
 
   const [q, setQ] = useState('');
   const [dept, setDept] = useState('');
@@ -134,8 +150,10 @@ export default function StaffPage() {
       <PageHeader eyebrow="People" title="Staff directory" subtitle={`${stats.total} current staff across ${departments.length} departments`}
         actions={<>
           <Button variant="outline" icon={<Download size={16} />} onClick={exportCSV}>Export CSV</Button>
+          {canEdit && <Button variant="outline" icon={<Upload size={16} />} onClick={() => setBulkOpen(true)} title="Add many staff from Excel, a photo of a list, or pasted names">Import</Button>}
           {canEdit && <Button icon={<UserPlus size={16} />} onClick={() => setForm({ open: true, staff: null })}>Add staff</Button>}
         </>} />
+      <BulkImport kind="staff" open={bulkOpen} onClose={() => setBulkOpen(false)} onTemplate={() => downloadTemplate('staff')} onImport={importRows} existing={staff.map((s) => `${s.firstName} ${s.lastName}`)} />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard label="Total staff" value={stats.total} icon={<Users size={20} />} sub={`${staff.length - stats.total} former`} />
@@ -302,6 +320,7 @@ const MiniStat: React.FC<{ label: string; value: string; sub: string; warn?: boo
 
 const StaffFormModal: React.FC<{ open: boolean; staff: Staff | null; departments: string[]; all: Staff[]; onClose: () => void }> = ({ open, staff, departments, all, onClose }) => {
   const { toast } = useUI();
+  const settingsName = useSettings()?.name;
   const [d, setD] = useState<Draft>(blank());
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -309,7 +328,7 @@ const StaffFormModal: React.FC<{ open: boolean; staff: Staff | null; departments
   useEffect(() => {
     if (!open) return;
     setErrors({});
-    setD(staff ? { ...blank(), ...staff } : { ...blank(), staffNo: nextStaffNo(all) });
+    setD(staff ? { ...blank(), ...staff } : { ...blank(), staffNo: nextStaffNo(all, settingsName) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, staff?.id]);
 

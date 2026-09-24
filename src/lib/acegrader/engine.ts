@@ -56,7 +56,7 @@ const sleep = (ms: number, signal?: AbortSignal) => new Promise<void>((res, rej)
 });
 
 /** Calls Gemini with a per-attempt timeout and one retry on transient failures. */
-async function callJSON(parts: any[], systemInstruction: string, responseSchema: any, signal?: AbortSignal): Promise<any> {
+export async function callJSON(parts: any[], systemInstruction: string, responseSchema: any, signal?: AbortSignal): Promise<any> {
   let lastErr: GraderError | null = null;
   for (let attempt = 0; attempt < 2; attempt++) {
     if (signal?.aborted) throw new GraderError('Cancelled.');

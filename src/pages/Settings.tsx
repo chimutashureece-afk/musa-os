@@ -1,11 +1,12 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { SchoolCrest, logoFromFile } from '../components/SchoolCrest';
 import { createUserWithEmailAndPassword, signOut } from 'firebase/auth';
-import {Building2, CalendarRange, Award, KeyRound, Database, Plus, Trash2, Download, Upload, RotateCcw, Save, UserPlus, PenLine, CheckCircle2, XCircle} from 'lucide-react';
+import {ImageUp, Building2, CalendarRange, Award, KeyRound, Database, Plus, Trash2, Download, Upload, RotateCcw, Save, UserPlus, PenLine, CheckCircle2, XCircle} from 'lucide-react';
 import { useAuth, useSettings } from '../context/AuthContext';
 import { store, useCollection, useIndex } from '../lib/store';
 import { Badge, Button, Card, EmptyState, Field, Input, Modal, PageHeader, Select, Tabs, TableWrap, useUI } from '../components/ui';
 import { ALL_COLLECTIONS, CollectionName, GradeBand, ROLE_LABELS, Role, SchoolSettings, ScaleKey, Term, UserProfile } from '../types';
-import { DEFAULT_SCALES, download, fmtDate, fullName, staffName } from '../lib/utils';
+import { DEFAULT_SCALES, cx, download, fmtDate, fullName, staffName } from '../lib/utils';
 import { getSecondaryAuth } from '../lib/firebase';
 import { WriteOp } from '../lib/backend';
 import { aiAvailable } from '../lib/acegrader/engine';
@@ -41,6 +42,41 @@ function useDraft<T>(initial: T) {
   return [d, setD] as const;
 }
 
+/** Upload, replace or remove the school's logo. Saved straight away (small image kept with the school). */
+const LogoCard: React.FC<{ s: SchoolSettings }> = ({ s }) => {
+  const { toast } = useUI();
+  const ref = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [drag, setDrag] = useState(false);
+  const upload = async (file?: File) => {
+    if (!file) return;
+    setBusy(true);
+    try { const logo = await logoFromFile(file); await store.update('settings', 'main', { logo }); toast('Logo saved'); }
+    catch (e: any) { toast(e?.message ?? 'Could not save the logo', 'error'); }
+    setBusy(false);
+  };
+  const remove = async () => { setBusy(true); try { await store.update('settings', 'main', { logo: null as any }); toast('Logo removed'); } catch (e: any) { toast(e.message, 'error'); } setBusy(false); };
+  return (
+    <Card title="School logo" subtitle="Shown on report cards, receipts, statements and the menu">
+      <input ref={ref} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="hidden" onChange={(e) => { upload(e.target.files?.[0]); e.target.value = ''; }} />
+      <div onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)} onDrop={(e) => { e.preventDefault(); setDrag(false); upload(e.dataTransfer.files?.[0]); }}
+        className={cx('flex items-center gap-4 rounded-xl border border-dashed p-4 transition', drag ? 'border-brand-500 bg-brand-50/50 dark:bg-brand-400/5' : 'border-slate-300 dark:border-white/15')}>
+        <div className="paper flex h-20 w-20 shrink-0 items-center justify-center rounded-xl bg-white ring-1 ring-slate-200 dark:ring-white/10">
+          <SchoolCrest settings={s} size={64} className="text-slate-800" />
+        </div>
+        <div className="min-w-0 text-sm">
+          <p className="font-semibold text-slate-900 dark:text-white">{s.logo ? 'Your logo' : 'No logo yet'}</p>
+          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">PNG with a clear background works best. Drop it here or choose a file.</p>
+          <div className="mt-2 flex gap-2">
+            <Button size="sm" onClick={() => ref.current?.click()} loading={busy} icon={<ImageUp size={14} />}>{s.logo ? 'Replace' : 'Upload logo'}</Button>
+            {s.logo && <Button size="sm" variant="ghost" onClick={remove} disabled={busy}>Remove</Button>}
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+};
+
 const SchoolTab: React.FC<{ s: SchoolSettings }> = ({ s }) => {
   const { toast } = useUI();
   const [d, setD] = useDraft(s);
@@ -69,8 +105,10 @@ const SchoolTab: React.FC<{ s: SchoolSettings }> = ({ s }) => {
         </div>
       </Card>
       <div className="space-y-6">
+        <LogoCard s={s} />
         <Card title="Letterhead preview">
-          <div className="rounded-xl border border-dashed border-slate-300 p-4 text-center dark:border-white/15">
+          <div className="paper rounded-xl border border-dashed border-slate-300 bg-white p-4 text-center dark:border-white/15">
+            <div className="mb-2 flex justify-center"><SchoolCrest settings={{ ...s, name: d.name || s.name }} size={48} className="text-slate-800" /></div>
             <p className="font-display tracking-tight text-xl font-bold">{d.name || 'School name'}</p>
             {d.motto && <p className="text-xs italic text-slate-500 dark:text-slate-400">“{d.motto}”</p>}
             <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">{[d.address, d.phone, d.email].filter(Boolean).join(' · ')}</p>

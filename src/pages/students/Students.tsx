@@ -9,7 +9,8 @@ import { Gender, Guardian, SchoolClass, Student, StudentStatus } from '../../typ
 import {
   Avatar, Badge, Button, Card, EmptyState, Field, Input, Modal, PageHeader, SearchInput, Select, Spinner, StatCard, TableWrap, Textarea, useUI,
 } from '../../components/ui';
-import { ageFrom, cx, download, fullName, nextNumber, parseCSV, studentMatches, toCSV, todayISO } from '../../lib/utils';
+import { ageFrom, cx, download, fullName, nextNumber, studentMatches, toCSV, todayISO } from '../../lib/utils';
+import { BulkImport, ReviewRow, downloadTemplate, normDate } from '../../components/BulkImport';
 
 // ------------------------------------------------------------------ shared --
 export const STATUS_OPTIONS: { id: StudentStatus; label: string }[] = [
@@ -249,58 +250,6 @@ export const StudentFormModal: React.FC<{
   );
 };
 
-// ---------------------------------------------------------- CSV import ------
-const IMPORT_COLUMNS = ['firstName', 'lastName', 'gender', 'dob', 'class', 'guardianName', 'guardianPhone', 'guardianEmail'];
-
-interface ImportPreview { fileName: string; valid: Student[]; errors: { row: number; name: string; reason: string }[] }
-
-function normDate(v: string): string | null {
-  const s = v.trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  const m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/); // dd/mm/yyyy
-  if (m) return `${m[3]}-${m[2]!.padStart(2, '0')}-${m[1]!.padStart(2, '0')}`;
-  return null;
-}
-
-function buildImport(fileName: string, text: string, classes: SchoolClass[], existing: Student[], schoolName?: string): ImportPreview {
-  const rows = parseCSV(text);
-  const byName = new Map(classes.map((c) => [c.name.trim().toLowerCase(), c]));
-  const valid: Student[] = [];
-  const errors: ImportPreview['errors'] = [];
-  const today = todayISO();
-  const year = new Date().getFullYear();
-  const issued: string[] = [];
-  rows.forEach((r, i) => {
-    const rowNo = i + 2; // header is row 1
-    const get = (k: string) => (r[k] ?? r[Object.keys(r).find((x) => x.toLowerCase() === k.toLowerCase()) ?? ''] ?? '').trim();
-    const firstName = get('firstName'), lastName = get('lastName');
-    const name = `${firstName} ${lastName}`.trim() || '(no name)';
-    const problems: string[] = [];
-    if (!firstName || !lastName) problems.push('missing first name or surname');
-    const g = get('gender').toUpperCase();
-    const gender: Gender | null = g === 'M' || g === 'MALE' || g === 'BOY' ? 'M' : g === 'F' || g === 'FEMALE' || g === 'GIRL' ? 'F' : null;
-    if (!gender) problems.push(`gender "${get('gender')}" should be M or F`);
-    const dob = normDate(get('dob'));
-    if (!dob) problems.push(`date of birth "${get('dob')}" should be YYYY-MM-DD`);
-    const cname = get('class');
-    const cls = byName.get(cname.toLowerCase());
-    if (!cls) problems.push(cname ? `unknown class "${cname}"` : 'missing class');
-    if (problems.length) { errors.push({ row: rowNo, name, reason: problems.join('; ') }); return; }
-    const admissionNo = nextAdmissionNo(existing, year, schoolName, issued);
-    issued.push(admissionNo);
-    const guardianName = get('guardianName');
-    valid.push({
-      id: newId() + i.toString(36),
-      admissionNo, firstName, lastName, gender: gender!, dob: dob!, classId: cls!.id, status: 'active', enrollDate: today,
-      guardians: guardianName || get('guardianPhone')
-        ? [{ name: guardianName || 'Guardian', relation: 'Guardian', phone: get('guardianPhone'), email: get('guardianEmail') || undefined }]
-        : [],
-      boarding: 'day',
-    });
-  });
-  return { fileName, valid, errors };
-}
-
 // ---------------------------------------------------------------- page ------
 const PAGE = 50;
 
@@ -322,8 +271,7 @@ export default function Students() {
   const [limit, setLimit] = useState(PAGE);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [form, setForm] = useState<{ open: boolean; student: Student | null }>({ open: false, student: null });
-  const [preview, setPreview] = useState<ImportPreview | null>(null);
-  const [importing, setImporting] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkClass, setBulkClass] = useState('');
   const [bulkStatus, setBulkStatus] = useState<StudentStatus | ''>('');
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -391,37 +339,23 @@ export default function Students() {
     toast(`Exported ${rows.length} students`);
   };
 
-  const downloadTemplate = () => {
-    const sample = classes[0]?.name ?? 'Form 1A';
-    download('student-import-template.csv', `${IMPORT_COLUMNS.join(',')}\nTatenda,Moyo,M,2013-04-21,${sample},Mrs Rudo Moyo,+263 77 123 4567,rudo.moyo@gmail.com\n`);
-  };
-
-  const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    e.target.value = '';
-    if (!f) return;
-    try {
-      const text = await f.text();
-      const p = buildImport(f.name, text, classes, students, settings?.name);
-      if (!p.valid.length && !p.errors.length) { toast('That file has no data rows', 'error'); return; }
-      setPreview(p);
-    } catch {
-      toast('Could not read that file', 'error');
-    }
-  };
-
-  const runImport = async () => {
-    if (!preview?.valid.length) return;
-    setImporting(true);
-    try {
-      await store.commit(preview.valid.map((s) => ({ op: 'set', col: 'students', id: s.id, data: s as any })));
-      toast(`Imported ${preview.valid.length} students`);
-      setPreview(null);
-    } catch (err: any) {
-      toast(err?.message ?? 'Import failed', 'error');
-    } finally {
-      setImporting(false);
-    }
+  const importRows = async (rows: ReviewRow[]) => {
+    const year = new Date().getFullYear();
+    const issued: string[] = [];
+    const today = todayISO();
+    const docs: Student[] = rows.map((r, i) => {
+      const admissionNo = nextAdmissionNo(students, year, settings?.name, issued);
+      issued.push(admissionNo);
+      return {
+        id: newId() + i.toString(36), admissionNo,
+        firstName: r.firstName!.trim(), lastName: r.lastName!.trim(), gender: r.gender as Gender, dob: normDate(r.dob),
+        classId: r.classId!, status: 'active', enrollDate: today, boarding: 'day',
+        guardians: r.guardianName?.trim() || r.guardianPhone?.trim()
+          ? [{ name: r.guardianName?.trim() || 'Parent / guardian', relation: 'Guardian', phone: r.guardianPhone?.trim() ?? '' }]
+          : [],
+      };
+    });
+    await store.commit(docs.map((d) => ({ op: 'set', col: 'students', id: d.id, data: d as any })));
   };
 
   const remove = async (s: Student) => {
@@ -466,10 +400,8 @@ export default function Students() {
         actions={<>
           <Button variant="outline" icon={<Download size={16} />} onClick={exportCSV}>Export CSV</Button>
           {canEdit && <>
-            <Button variant="outline" icon={<Upload size={16} />} onClick={() => fileRef.current?.click()} title="Import a CSV with columns firstName, lastName, gender, dob, class, guardianName, guardianPhone, guardianEmail">Import CSV</Button>
-            <Button variant="ghost" icon={<FileSpreadsheet size={16} />} onClick={downloadTemplate} title="Download a CSV template for importing">Template</Button>
+            <Button variant="outline" icon={<Upload size={16} />} onClick={() => setBulkOpen(true)} title="Add many learners from Excel, a photo of a class list, or pasted names">Import</Button>
             <Button icon={<UserPlus size={16} />} onClick={() => setForm({ open: true, student: null })}>Enrol student</Button>
-            <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={onFile} />
           </>}
         </>} />
 
@@ -606,67 +538,8 @@ export default function Students() {
 
       <StudentFormModal open={form.open} student={form.student} defaultClassId={classId || undefined} onClose={() => setForm({ open: false, student: null })} />
 
-      <Modal open={!!preview} onClose={() => setPreview(null)} title="Import students" size="lg"
-        footer={<>
-          <Button variant="ghost" icon={<FileSpreadsheet size={16} />} onClick={downloadTemplate} className="mr-auto">Template</Button>
-          <Button variant="outline" onClick={() => setPreview(null)}>Cancel</Button>
-          <Button onClick={runImport} loading={importing} disabled={!preview?.valid.length}>Import {preview?.valid.length ?? 0} student{preview?.valid.length === 1 ? '' : 's'}</Button>
-        </>}>
-        {preview && (
-          <div className="space-y-5">
-            <div className="flex items-center gap-3 rounded-xl bg-slate-50 p-3 text-sm dark:bg-white/[0.03]">
-              <FileSpreadsheet size={18} className="text-slate-400 dark:text-slate-400" />
-              <span className="font-medium text-slate-700 dark:text-slate-200">{preview.fileName}</span>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-xl border border-slate-200 bg-slate-100 p-4 dark:border-white/10 dark:bg-white/[0.06]">
-                <p className="text-2xl font-bold text-brand-700 dark:text-brand-400">{preview.valid.length}</p>
-                <p className="text-xs font-semibold text-brand-700/80 dark:text-brand-400/80">ready to import</p>
-              </div>
-              <div className={cx('rounded-xl border p-4', preview.errors.length ? 'border-slate-200 bg-slate-100 dark:border-white/10 dark:bg-white/[0.06]' : 'border-slate-200 dark:border-white/10')}>
-                <p className={cx('text-2xl font-bold', preview.errors.length ? 'text-rose-700 dark:text-rose-400' : 'text-slate-400')}>{preview.errors.length}</p>
-                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">rows with problems (skipped)</p>
-              </div>
-            </div>
-            {preview.valid.length > 0 && (
-              <div>
-                <p className="label">First rows</p>
-                <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200 text-sm dark:divide-white/5 dark:border-white/10">
-                  {preview.valid.slice(0, 5).map((s) => (
-                    <li key={s.id} className="flex items-center justify-between gap-3 px-3 py-2">
-                      <span className="font-medium text-slate-700 dark:text-slate-200">{fullName(s)}</span>
-                      <span className="text-xs text-slate-500 dark:text-slate-400">{classIdx.get(s.classId)?.name} · <span className="font-mono">{s.admissionNo}</span></span>
-                    </li>
-                  ))}
-                  {preview.valid.length > 5 && <li className="px-3 py-2 text-xs text-slate-400">and {preview.valid.length - 5} more…</li>}
-                </ul>
-              </div>
-            )}
-            {preview.errors.length > 0 && (
-              <div>
-                <p className="label">Problems</p>
-                <div className="max-h-56 overflow-y-auto rounded-xl border border-rose-200 dark:border-rose-500/30">
-                  <table className="w-full text-sm">
-                    <tbody>
-                      {preview.errors.map((e) => (
-                        <tr key={e.row} className="tr first:border-t-0">
-                          <td className="td w-16 font-mono text-xs text-slate-400">Row {e.row}</td>
-                          <td className="td font-medium">{e.name}</td>
-                          <td className="td text-rose-600 dark:text-rose-400">{e.reason}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Class names must match exactly one of: {classes.map((c) => c.name).join(', ')}.</p>
-              </div>
-            )}
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Expected columns: <span className="font-mono">{IMPORT_COLUMNS.join(', ')}</span>. Dates as YYYY-MM-DD or DD/MM/YYYY. Imported students are enrolled today as active day scholars and receive admission numbers automatically.
-            </p>
-          </div>
-        )}
-      </Modal>
+      <BulkImport kind="students" open={bulkOpen} onClose={() => setBulkOpen(false)} classes={classes} defaultClassId={classId || undefined}
+        onTemplate={() => downloadTemplate('students', classes[0]?.name)} onImport={importRows} existing={students.map((s) => `${s.firstName} ${s.lastName}`)} />
     </div>
   );
 }

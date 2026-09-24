@@ -73,6 +73,8 @@ export interface SchoolSettings extends BaseDoc {
   schoolType?: Section;
   /** Six-letter code staff and parents type to ask to join this school. */
   joinCode?: string;
+  /** School badge / logo as a small image (data URL, ≤ ~150 KB) — shown on reports, receipts and the menu. */
+  logo?: string;
   motto: string;
   address: string;
   phone: string;

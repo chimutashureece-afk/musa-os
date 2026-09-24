@@ -165,7 +165,7 @@ export default function Setup() {
   };
 
   const steps = [
-    { done: !!settings?.address || !!settings?.phone, label: 'School details', body: 'Address, phone and head’s name for reports and receipts', to: '/settings' },
+    { done: !!settings?.logo || !!settings?.address || !!settings?.phone, label: 'School details', body: 'Logo, address, phone and head’s name for reports and receipts', to: '/settings' },
     { done: counts.users > 1 || counts.staff > 0, label: 'Staff logins', body: 'Share your code or create logins below', to: '#people' },
     { done: counts.classes > 0, label: 'Classes', body: 'Levels and streams', to: '/classes' },
     { done: counts.students > 0, label: 'Learners', body: 'Enrol or import from a spreadsheet', to: '/students' },
