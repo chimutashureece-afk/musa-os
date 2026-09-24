@@ -70,3 +70,11 @@ export function starterSubjects(type: Section): Subject[] {
   const now = Date.now();
   return (type === 'primary' ? PRIMARY : SECONDARY).map(([id, name, code, department]) => ({ id, name, code, department, section: type, createdAt: now }));
 }
+
+/** Short, easy-to-read code (no 0/O, 1/I) that people type to ask to join a school. */
+export function makeJoinCode(): string {
+  const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const buf = new Uint32Array(6);
+  crypto.getRandomValues(buf);
+  return Array.from(buf, (n) => A[n % A.length]).join('');
+}

@@ -28,6 +28,23 @@ export interface UserProfile extends BaseDoc {
   studentIds?: string[]; // parents: children; students: [self]
   classIds?: string[]; // derived: classes of linked students (used for rules)
   disabled?: boolean;
+  /** Demo accounts may switch which role they view the school as. */
+  demo?: boolean;
+}
+
+/** Someone asking to join a school; the head accepts or declines. Lives at joinRequests/{uid}. */
+export interface JoinRequest {
+  id: string; // = uid of the person asking
+  uid: string;
+  schoolId: string;
+  schoolName: string;
+  name: string;
+  email: string;
+  role: Exclude<Role, 'admin'>;
+  note?: string;
+  status: 'pending' | 'approved' | 'declined';
+  createdAt: number;
+  decidedAt?: number;
 }
 
 // ---------------------------------------------------------------- settings --
@@ -54,6 +71,8 @@ export interface SchoolSettings extends BaseDoc {
   name: string;
   /** Which levels the school runs: ECD–Grade 7 or Form 1–6. Older schools without it show every level. */
   schoolType?: Section;
+  /** Six-letter code staff and parents type to ask to join this school. */
+  joinCode?: string;
   motto: string;
   address: string;
   phone: string;

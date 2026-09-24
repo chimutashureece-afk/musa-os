@@ -14,6 +14,7 @@ export function friendlyAuthError(e: any): string {
     case 'auth/too-many-requests': return 'Too many attempts. Wait a few minutes and try again.';
     case 'auth/network-request-failed': return 'No connection. Check your internet and try again.';
     case 'auth/operation-not-allowed': return 'Email sign-in is switched off. In the Firebase console, open Authentication → Sign-in method and enable Email/Password.';
+    case 'auth/admin-restricted-operation': return 'Demo accounts are switched off. In the Firebase console, open Authentication → Sign-in method and enable Anonymous.';
     case 'auth/configuration-not-found': return 'Firebase Authentication isn’t set up yet. In the Firebase console, open Authentication and click Get started, then enable Email/Password.';
     case 'auth/unauthorized-domain': return `This web address isn’t allowed to sign in yet. In the Firebase console, open Authentication → Settings → Authorized domains and add ${location.hostname}.`;
     case 'auth/invalid-api-key':

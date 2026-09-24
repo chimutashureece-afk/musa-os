@@ -27,6 +27,8 @@ const CalendarPage = lazy(() => import('./pages/Calendar'));
 const LibraryPage = lazy(() => import('./pages/Library'));
 const Conduct = lazy(() => import('./pages/Conduct'));
 const SettingsPage = lazy(() => import('./pages/Settings'));
+const Setup = lazy(() => import('./pages/Setup'));
+const Pending = lazy(() => import('./pages/Auth').then((m) => ({ default: m.PendingApproval })));
 
 const Guard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { profile } = useAuth();
@@ -44,8 +46,9 @@ const ErrorBridge: React.FC = () => {
 };
 
 const Shell: React.FC = () => {
-  const { ready, profile } = useAuth();
+  const { ready, profile, pending } = useAuth();
   if (!ready) return <Spinner label="Starting Musa OS…" />;
+  if (pending && !profile) return <Suspense fallback={<Spinner />}><Pending /></Suspense>;
   return (
     <Suspense fallback={<Spinner />}>
       <Routes>
@@ -54,6 +57,7 @@ const Shell: React.FC = () => {
         <Route path="/signup" element={profile ? <Navigate to="/" replace /> : <SignUp />} />
         <Route element={<Guard><Layout /></Guard>}>
           <Route index element={<Dashboard />} />
+          <Route path="setup" element={<Setup />} />
           <Route path="students" element={<Students />} />
           <Route path="students/:id" element={<StudentProfile />} />
           <Route path="staff" element={<StaffPage />} />

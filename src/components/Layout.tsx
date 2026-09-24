@@ -4,9 +4,10 @@ import {GraduationCap, LogOut, Menu, Moon, Sun, X, Search, ChevronDown, FlaskCon
 import { navFor } from '../nav';
 import { useAuth, useSettings } from '../context/AuthContext';
 import { ROLE_LABELS, Role } from '../types';
-import { Avatar, Badge } from './ui';
+import { Avatar, Badge, useUI } from './ui';
 import { MusaMark } from './Logo';
 import { Tour, restartTour } from './Tour';
+import { usePendingRequests } from '../lib/joinRequests';
 import { cx, currentTerm, fullName } from '../lib/utils';
 import { useCollection, useIndex } from '../lib/store';
 import { isStaffRole } from '../lib/permissions';
@@ -32,7 +33,7 @@ const Brand: React.FC<{ name?: string }> = ({ name }) => (
   </div>
 );
 
-const Sidebar: React.FC<{ onNavigate?: () => void }> = ({ onNavigate }) => {
+const Sidebar: React.FC<{ onNavigate?: () => void; requests?: number }> = ({ onNavigate, requests = 0 }) => {
   const { profile, logout } = useAuth();
   const settings = useSettings();
   const groups = navFor(profile!.role);
@@ -52,7 +53,9 @@ const Sidebar: React.FC<{ onNavigate?: () => void }> = ({ onNavigate }) => {
                     {isActive && <span className="absolute -left-3 top-1.5 bottom-1.5 w-[3px] rounded-r bg-white/70" />}
                     <i.icon size={16} className={cx('shrink-0', isActive ? 'text-white' : 'text-white/45 group-hover:text-white/80')} />
                     <span className="flex-1 truncate">{i.label}</span>
-                    {i.badge && <span className="rounded bg-marigold-400/15 px-1.5 py-px text-[10px] font-bold text-marigold-300">{i.badge}</span>}
+                    {i.to === '/setup' && requests > 0
+                      ? <span className="min-w-[18px] rounded-full bg-marigold-400 px-1.5 py-px text-center text-[10px] font-bold text-slate-900" aria-label={`${requests} requests`}>{requests}</span>
+                      : i.badge && <span className="rounded bg-marigold-400/15 px-1.5 py-px text-[10px] font-bold text-marigold-300">{i.badge}</span>}
                   </>)}
                 </NavLink>
               ))}
@@ -111,17 +114,67 @@ const QuickSearch: React.FC = () => {
   );
 };
 
-/** Thin strip across the top of the practice school. */
+const VIEW_AS: { role: Role; label: string }[] = [
+  { role: 'admin', label: 'Head / admin' }, { role: 'teacher', label: 'Teacher' }, { role: 'bursar', label: 'Bursar' },
+  { role: 'parent', label: 'Parent' }, { role: 'student', label: 'Learner' },
+];
+
+/** Strip across the top of a demo school: whose view you're in, switch it, restart or leave. */
 const DemoBar: React.FC<{ onTour: () => void }> = ({ onTour }) => {
-  const { endDemo } = useAuth();
+  const { profile, endDemo, switchRole, configured } = useAuth();
+  const { toast, confirm } = useUI();
   const nav = useNavigate();
+  const { data: students } = useCollection('students');
+  const { data: staff } = useCollection('staff');
+  const [busy, setBusy] = useState(false);
+
+  const change = async (role: Role) => {
+    if (!profile || role === profile.role) return;
+    let v: Parameters<typeof switchRole>[0] = { role };
+    if (role === 'parent' || role === 'student') {
+      const own = profile.studentIds?.filter(Boolean) ?? [];
+      const pool = own.length ? own : students.filter((s) => s.status === 'active').map((s) => s.id);
+      const ids = pool.slice(0, role === 'parent' ? 2 : 1);
+      if (!ids.length) { toast('Enrol a learner first — then you can see the school as their parent or as the learner.', 'error'); return; }
+      const classIds = [...new Set(ids.map((id) => students.find((s) => s.id === id)?.classId).filter(Boolean) as string[])];
+      v = { role, studentIds: ids, classIds: classIds.length ? classIds : profile.classIds ?? [] };
+    } else if (role === 'teacher' || role === 'bursar') {
+      const pick = profile.staffId ?? staff.find((s) => s.status !== 'left')?.id;
+      v = { role, staffId: pick };
+    }
+    setBusy(true);
+    try { await switchRole(v); nav('/'); toast(`Now viewing as ${VIEW_AS.find((x) => x.role === role)!.label.toLowerCase()}`); }
+    catch (e: any) { toast(e?.message ?? 'Could not switch view', 'error'); }
+    setBusy(false);
+  };
+
+  const leave = async (to: string) => {
+    const ok = await confirm({
+      title: 'Leave the demo?',
+      body: configured ? 'You’ll be signed out of this demo account on this device, and it can’t be reopened afterwards.' : 'The demo school in this browser will be deleted.',
+      confirmText: 'Leave demo', danger: true,
+    });
+    if (!ok) return;
+    await endDemo(); nav(to);
+  };
+
   return (
-    <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 bg-brand-950 px-4 py-2 text-center text-[13px] text-white/80 dark:bg-ink-950 dark:text-white/70 no-print">
-      <span><b className="font-semibold text-white">Practice school</b> · kept in this browser only, never sent online</span>
+    <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1.5 bg-brand-950 px-4 py-2 text-center text-[13px] text-white/80 dark:bg-ink-950 dark:text-white/70 no-print">
+      <span><b className="font-semibold text-white">Demo school</b> · {configured ? 'your own demo account — changes are saved' : 'saved in this browser'}</span>
+      <label className="flex items-center gap-2">
+        <span className="text-white/60">View as</span>
+        <span className="relative">
+          <select value={profile?.role} disabled={busy} onChange={(e) => change(e.target.value as Role)} aria-label="View the demo school as"
+            className="appearance-none rounded-md bg-white/10 py-1 pl-2.5 pr-7 text-[13px] font-semibold text-white outline-none hover:bg-white/15 focus:ring-2 focus:ring-white/30 disabled:opacity-60 [&>option]:text-slate-900">
+            {VIEW_AS.map((r) => <option key={r.role} value={r.role}>{r.label}</option>)}
+          </select>
+          <ChevronDown size={13} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-white/70" />
+        </span>
+      </label>
       <span className="flex items-center gap-3">
-        <button onClick={onTour} className="font-semibold text-white underline-offset-4 hover:underline">Restart tour</button>
-        <button onClick={() => { endDemo(); nav('/signup'); }} className="font-semibold text-marigold-300 underline-offset-4 hover:underline">Create my real school</button>
-        <button onClick={() => { endDemo(); nav('/login'); }} className="text-white/60 underline-offset-4 hover:text-white hover:underline">Leave</button>
+        {profile?.role === 'admin' && <button onClick={onTour} className="font-semibold text-white underline-offset-4 hover:underline">Restart tour</button>}
+        <button onClick={() => leave('/signup')} className="font-semibold text-marigold-300 underline-offset-4 hover:underline">Create my real school</button>
+        <button onClick={() => leave('/login')} className="text-white/60 underline-offset-4 hover:text-white hover:underline">Leave</button>
       </span>
     </div>
   );
@@ -131,6 +184,15 @@ export const Layout: React.FC = () => {
   const { profile, mode, endDemo } = useAuth();
   const nav = useNavigate();
   const [tourKey, setTourKey] = useState(0);
+  const requests = usePendingRequests(profile);
+  const { toast } = useUI();
+  const seen = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    // tell the head when someone new asks to join (not for the ones already waiting on load)
+    const ids = new Set(requests.map((r) => r.id));
+    if (seen.current) requests.filter((r) => !seen.current!.has(r.id)).forEach((r) => toast(`${r.name} asked to join as ${ROLE_LABELS[r.role].toLowerCase()} — see Get started`));
+    seen.current = ids;
+  }, [requests, toast]);
   const settings = useSettings();
   const { dark, toggle } = useTheme();
   const [drawer, setDrawer] = useState(false);
@@ -142,7 +204,7 @@ export const Layout: React.FC = () => {
     <div className="min-h-screen">
       {/* desktop sidebar */}
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 lg:block dark:border-r dark:border-white/[0.07]">
-        <Sidebar />
+        <Sidebar requests={requests.length} />
       </aside>
       {/* mobile drawer */}
       {drawer && (
@@ -150,7 +212,7 @@ export const Layout: React.FC = () => {
           <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" onClick={() => setDrawer(false)} />
           <aside className="absolute inset-y-0 left-0 w-72 shadow-2xl animate-slide-up">
             <button onClick={() => setDrawer(false)} aria-label="Close menu" className="absolute right-3 top-5 z-10 rounded-lg p-2 text-white/60"><X size={18} /></button>
-            <Sidebar onNavigate={() => setDrawer(false)} />
+            <Sidebar requests={requests.length} onNavigate={() => setDrawer(false)} />
           </aside>
         </div>
       )}
@@ -168,7 +230,7 @@ export const Layout: React.FC = () => {
         <main className="mx-auto max-w-[1360px] px-4 py-6 md:px-8 md:py-9">
           <Outlet />
         </main>
-        {mode === 'demo' && <Tour key={tourKey} onFinish={() => { endDemo(); nav('/signup'); }} />}
+        {mode === 'demo' && profile?.role === 'admin' && <Tour key={tourKey} onFinish={async () => { await endDemo(); nav('/signup'); }} />}
       </div>
     </div>
   );

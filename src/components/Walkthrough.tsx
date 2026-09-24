@@ -315,7 +315,7 @@ export const Walkthrough: React.FC<{ open: boolean; onClose: () => void; onTry: 
               {ended && (
                 <div className="absolute inset-0 z-40 flex animate-fade-in flex-col items-center justify-center bg-white/85 text-center backdrop-blur-sm dark:bg-ink-900/85">
                   <p className="font-display text-[26px] font-bold tracking-tight text-slate-900 dark:text-white">Now try it yourself.</p>
-                  <p className="mt-1 max-w-sm text-[14px] text-slate-500 dark:text-slate-400">Open an empty practice school and a guide will walk you through the same steps.</p>
+                  <p className="mt-1 max-w-sm text-[14px] text-slate-500 dark:text-slate-400">Open an empty demo school and a guide will walk you through the same steps.</p>
                   <div className="mt-5 flex gap-2">
                     <button onClick={onTry} className="rounded-lg bg-brand-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-900 dark:bg-brand-600">Try the demo</button>
                     <button onClick={() => jump(0)} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/5"><RotateCcw size={15} /> Watch again</button>

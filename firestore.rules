@@ -21,7 +21,43 @@ service cloud.firestore {
         && getAfter(/databases/$(database)/documents/schools/$(request.resource.data.schoolId)).data.ownerUid == request.auth.uid;
       // admins manage accounts in their own school
       allow create, update: if member(request.resource.data.schoolId) && role() == 'admin';
+      // demo schools: the visitor may switch which role they are viewing the school as
+      allow update: if signedIn() && request.auth.uid == uid
+        && resource.data.get('demo', false) == true
+        && get(/databases/$(database)/documents/schools/$(resource.data.schoolId)).data.get('demo', false) == true
+        && request.resource.data.schoolId == resource.data.schoolId
+        && request.resource.data.get('demo', false) == true
+        && request.resource.data.role in ['admin', 'teacher', 'bursar', 'parent', 'student']
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'staffId', 'studentIds', 'classIds']);
       allow delete: if member(resource.data.schoolId) && role() == 'admin';
+    }
+
+    // ---------------------------------------------------------- join codes --
+    // Six-letter codes people type to ask to join a school. Anyone may look one up.
+    match /schoolCodes/{code} {
+      allow get: if true;
+      allow create: if signedIn() && (
+        getAfter(/databases/$(database)/documents/schools/$(request.resource.data.schoolId)).data.ownerUid == request.auth.uid
+        || (member(request.resource.data.schoolId) && role() == 'admin'));
+      allow delete: if member(resource.data.schoolId) && role() == 'admin';
+    }
+
+    // ------------------------------------------------------- join requests --
+    // joinRequests/{uid}: sent by the person signing up, answered by the head of that school.
+    match /joinRequests/{uid} {
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.uid == uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.role in ['teacher', 'bursar', 'parent', 'student']
+        && exists(/databases/$(database)/documents/schools/$(request.resource.data.schoolId))
+        && !exists(/databases/$(database)/documents/users/$(uid));
+      allow get: if signedIn() && (request.auth.uid == uid || (member(resource.data.schoolId) && role() == 'admin'));
+      allow list: if member(resource.data.schoolId) && role() == 'admin';
+      allow update: if member(resource.data.schoolId) && role() == 'admin'
+        && request.resource.data.schoolId == resource.data.schoolId
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.status in ['approved', 'declined'];
+      allow delete: if signedIn() && request.auth.uid == uid;
     }
 
     // --------------------------------------------------------------- school --

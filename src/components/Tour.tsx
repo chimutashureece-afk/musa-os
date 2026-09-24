@@ -1,4 +1,4 @@
-// Guided tour for the practice school. A card follows the user around the app,
+// Guided tour for the demo school. A card follows the user around the app,
 // a moving ring points at the next thing to press, and each step ticks itself
 // off when the matching record appears — no sample data is ever inserted.
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -20,7 +20,8 @@ interface Step {
 }
 
 const STEPS: Step[] = [
-  { title: 'Welcome to your practice school', body: 'It’s empty on purpose — you’ll set it up the way a real school would, in about five minutes. Nothing here is saved online.' },
+  { title: 'Welcome to your demo school', body: 'It’s empty on purpose — you’ll set it up the way a real school would, in about five minutes. Everything you add is saved to your demo account.' },
+  { title: 'Your setup space', route: '/setup', target: { text: 'Create login' }, body: 'Share your school code so staff and parents can ask to join — their requests pop up here instantly for you to accept. Or create a login yourself and choose the password.' },
   { title: 'Create your first class', route: '/classes', target: { text: 'New class' }, needs: 'classes', body: 'Press “New class”, pick a level and stream, and save. Every register, mark sheet and fee bill hangs off a class.' },
   { title: 'Add a teacher', route: '/staff', target: { text: 'Add staff' }, needs: 'staff', body: 'Press “Add staff” and add yourself or a colleague as a teacher. Only a name and position are needed.' },
   { title: 'Give the class a subject', route: '/classes', target: { text: 'Allocations' }, needs: 'allocations', body: 'Open “Allocations”, choose the class, a subject and the teacher, then press “Add”. This tells the gradebook who teaches what.' },
@@ -31,7 +32,7 @@ const STEPS: Step[] = [
   { title: 'Set the term’s fees', route: '/finance', target: { text: 'Fee structures' }, needs: 'feeStructures', body: 'Open “Fee structures” and add one — for example tuition of $150 for your level. You can then bill the whole class in one go.' },
   { title: 'Report cards write themselves', route: '/reports', target: { text: 'Print report cards' }, body: 'Marks, positions, attendance and remarks come together here. Print them on A4 or publish them to parents’ phones.' },
   { title: 'AceGrader — the extra', route: '/acegrader', target: { nav: '/acegrader' }, body: 'An optional add-on: it marks learners’ work against your answer key or rubric, you check it, and the scores go straight into the gradebook.' },
-  { title: 'That’s the whole loop', finale: true, body: 'Class → learners → register → marks → fees → reports. When you’re ready, create your real school — it starts just as empty, with the same subjects and grading.' },
+  { title: 'That’s the whole loop', finale: true, body: 'Class → learners → register → marks → fees → reports. Use “View as” at the top to see it as a teacher, parent or learner. When you’re ready, create your real school.' },
 ];
 
 const TOUR_KEY = 'musa-tour';
@@ -165,7 +166,7 @@ export const Tour: React.FC<{ onFinish: () => void }> = ({ onFinish }) => {
               </button>
             )}
           </div>
-          {s.finale && <button onClick={() => set({ open: false })} className="mt-2 w-full text-center text-xs text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white">Keep exploring the practice school</button>}
+          {s.finale && <button onClick={() => set({ open: false })} className="mt-2 w-full text-center text-xs text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white">Keep exploring — try “View as” at the top</button>}
         </div>
       </div>
     </>

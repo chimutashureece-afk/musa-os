@@ -1,14 +1,16 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Check, Eye, EyeOff, Moon, Sun } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { ArrowLeft, ArrowRight, Check, Clock, Eye, EyeOff, Moon, School, Sun, Users, XCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { Button, Field, Input } from '../components/ui';
+import { Button, Field, Input, Select, Textarea } from '../components/ui';
 import { useTheme } from '../components/Layout';
 import { MusaLogo } from '../components/Logo';
 import { SCHOOL_TYPES } from '../lib/defaults';
 import { Section } from '../types';
 import { cx } from '../lib/utils';
 import { friendlyAuthError } from '../lib/authErrors';
+import { REQUEST_ROLES, findSchoolByCode } from '../lib/joinRequests';
+import { JoinRequest } from '../types';
 
 const friendly = friendlyAuthError;
 
@@ -118,7 +120,7 @@ export function SignIn() {
 }
 
 // -------------------------------------------------------------- sign up --
-export function SignUp() {
+function NewSchool({ onBack }: { onBack: () => void }) {
   const { registerSchool, configured } = useAuth();
   const nav = useNavigate();
   const [step, setStep] = useState<1 | 2>(1);
@@ -132,7 +134,7 @@ export function SignUp() {
     e.preventDefault();
     if (!type) { setStep(1); return; }
     setErr(null); setBusy(true);
-    try { await registerSchool({ ...f, schoolName: f.schoolName.trim(), name: f.name.trim(), schoolType: type }); nav('/', { replace: true }); }
+    try { await registerSchool({ ...f, schoolName: f.schoolName.trim(), name: f.name.trim(), schoolType: type }); nav('/setup', { replace: true }); }
     catch (x) { setErr(friendly(x)); setBusy(false); }
   };
 
@@ -144,6 +146,7 @@ export function SignUp() {
 
   return (
     <Frame aside={aside}>
+      <button type="button" onClick={onBack} className="mb-4 inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"><ArrowLeft size={15} /> Back</button>
       <div className="mb-6 flex items-center gap-2 text-xs font-medium text-slate-400">
         <span className={cx(step === 1 ? 'text-slate-900 dark:text-white' : '')}>1 · School type</span>
         <span className="h-px w-6 bg-slate-300 dark:bg-white/15" />
@@ -199,6 +202,134 @@ export function SignUp() {
       <p className="mt-8 text-sm text-slate-500 dark:text-slate-400">
         Already have an account? <Link to="/signin" className="font-semibold text-brand-700 hover:underline dark:text-brand-300">Sign in</Link>
       </p>
+    </Frame>
+  );
+}
+
+// ------------------------------------------------------------ sign up: pick --
+/** Choice between starting a school (the head) and asking to join one (everyone else). */
+export function SignUp() {
+  const [params] = useSearchParams();
+  const joinCode = params.get('join') ?? '';
+  const [path, setPath] = useState<'pick' | 'new' | 'join'>(joinCode ? 'join' : 'pick');
+  if (path === 'new') return <NewSchool onBack={() => setPath('pick')} />;
+  if (path === 'join') return <JoinSchool initialCode={joinCode} onBack={() => setPath('pick')} />;
+
+  const opt = (k: 'new' | 'join', icon: React.ReactNode, title: string, body: string) => (
+    <button type="button" onClick={() => setPath(k)}
+      className="group flex w-full items-start gap-4 rounded-xl border border-slate-200 bg-white p-4 text-left transition hover:border-brand-600 hover:ring-[3px] hover:ring-brand-600/10 dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-brand-400">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-700 dark:bg-white/[0.06] dark:text-slate-200">{icon}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block font-display text-[16px] font-semibold tracking-tight text-slate-900 dark:text-white">{title}</span>
+        <span className="mt-0.5 block text-sm leading-relaxed text-slate-500 dark:text-slate-400">{body}</span>
+      </span>
+      <ArrowRight size={17} className="mt-2.5 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-brand-700 dark:group-hover:text-brand-300" />
+    </button>
+  );
+
+  return (
+    <Frame aside={<PaperAside title="Two ways in" lines={['The head creates the school', 'Staff and parents ask to join', 'The head accepts each one', 'Everyone sees the same records']} />}>
+      <h1 className="font-display text-[2rem] font-bold leading-tight tracking-[-0.03em] text-slate-900 dark:text-white">Create an account</h1>
+      <p className="mt-1.5 text-[15px] text-slate-500 dark:text-slate-400">Are you setting up your school, or joining one that already uses Musa OS?</p>
+      <div className="mt-7 space-y-3">
+        {opt('new', <School size={19} />, 'Set up a new school', 'For the head or administrator. You’ll invite staff and approve who gets in.')}
+        {opt('join', <Users size={19} />, 'Join my school', 'For teachers, the bursar, parents and learners. You need the school code from the office.')}
+      </div>
+      <p className="mt-8 text-sm text-slate-500 dark:text-slate-400">
+        Already have an account? <Link to="/signin" className="font-semibold text-brand-700 hover:underline dark:text-brand-300">Sign in</Link>
+      </p>
+    </Frame>
+  );
+}
+
+// ----------------------------------------------------------- sign up: join --
+function JoinSchool({ initialCode, onBack }: { initialCode: string; onBack: () => void }) {
+  const { requestToJoin, configured } = useAuth();
+  const [code, setCode] = useState(initialCode.toUpperCase());
+  const [school, setSchool] = useState<{ name: string } | null | 'checking'>(null);
+  const [f, setF] = useState<{ role: JoinRequest['role']; name: string; email: string; password: string; note: string }>({ role: 'teacher', name: '', email: '', password: '', note: '' });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    const c = code.trim();
+    if (!configured || c.length < 6) { setSchool(null); return; }
+    let live = true;
+    setSchool('checking');
+    const t = setTimeout(() => {
+      findSchoolByCode(c).then((r) => live && setSchool(r ? { name: r.name } : null)).catch(() => live && setSchool(null));
+    }, 300);
+    return () => { live = false; clearTimeout(t); };
+  }, [code, configured]);
+
+  const family = f.role === 'parent' || f.role === 'student';
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErr(null); setBusy(true);
+    try { await requestToJoin({ code, ...f, name: f.name.trim() }); }
+    catch (x) { setErr(friendly(x)); setBusy(false); }
+  };
+
+  return (
+    <Frame aside={<PaperAside title="Joining a school" lines={['Type the school code', 'Say who you are', 'The head gets your request', 'You’re in once accepted']} />}>
+      <button type="button" onClick={onBack} className="mb-4 inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"><ArrowLeft size={15} /> Back</button>
+      <h1 className="font-display text-[2rem] font-bold leading-tight tracking-[-0.03em] text-slate-900 dark:text-white">Join your school</h1>
+      <p className="mt-1.5 text-[15px] text-slate-500 dark:text-slate-400">Your request goes straight to the head. You can sign in as soon as they accept it.</p>
+      {!configured ? <div className="mt-8"><NotConfigured /></div> : (
+        <form onSubmit={submit} className="mt-7 space-y-4">
+          <Field label="School code" hint={school === 'checking' ? 'Checking…' : school ? undefined : 'Six letters and numbers — ask the school office'}>
+            <Input required autoFocus={!initialCode} value={code} onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6))}
+              className="font-mono text-[17px] tracking-[0.25em]" placeholder="ABC234" autoCapitalize="characters" />
+            {school && school !== 'checking' && <span className="mt-1.5 flex items-center gap-1.5 text-sm font-medium text-brand-800 dark:text-brand-300"><Check size={15} /> {school.name}</span>}
+          </Field>
+          <Field label="I am a">
+            <Select value={f.role} onChange={(e) => setF({ ...f, role: e.target.value as JoinRequest['role'] })}>
+              {REQUEST_ROLES.map((r) => <option key={r.role} value={r.role}>{r.label}</option>)}
+            </Select>
+          </Field>
+          <Field label="Your full name"><Input required autoComplete="name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder={family ? 'e.g. Rudo Chikwanha' : 'e.g. Mr B. Sibanda'} /></Field>
+          {family && (
+            <Field label={f.role === 'parent' ? 'Your child’s name and class' : 'Your class'} hint="Helps the head link you to the right learner">
+              <Textarea value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} className="min-h-[64px]" placeholder={f.role === 'parent' ? 'e.g. Tanaka Chikwanha, Form 3A' : 'e.g. Form 3A'} />
+            </Field>
+          )}
+          <Field label="Email"><Input type="email" required autoComplete="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></Field>
+          <Field label="Password" hint="At least 6 characters"><PasswordInput value={f.password} onChange={(v) => setF({ ...f, password: v })} autoComplete="new-password" /></Field>
+          {err && <Notice>{err}</Notice>}
+          <Button type="submit" size="lg" className="w-full" loading={busy} disabled={!school || school === 'checking'}>Send request</Button>
+        </form>
+      )}
+      <p className="mt-8 text-sm text-slate-500 dark:text-slate-400">
+        Already accepted? <Link to="/signin" className="font-semibold text-brand-700 hover:underline dark:text-brand-300">Sign in</Link>
+      </p>
+    </Frame>
+  );
+}
+
+// -------------------------------------------------------- waiting to be let in --
+export function PendingApproval() {
+  const { pending, cancelRequest } = useAuth();
+  const nav = useNavigate();
+  if (!pending) return null;
+  const declined = pending.status === 'declined';
+  return (
+    <Frame aside={<PaperAside title={declined ? 'Request declined' : 'Request sent'} lines={declined ? ['Check the school code', 'Speak to the school office'] : ['Sent to the head', 'Waiting for approval', 'This page updates by itself']} />}>
+      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-700 dark:bg-white/[0.06] dark:text-slate-200">
+        {declined ? <XCircle size={22} /> : <span className="relative flex"><Clock size={22} /><span className="absolute -right-1 -top-1 h-2.5 w-2.5 animate-ping rounded-full bg-marigold-400" /></span>}
+      </div>
+      <h1 className="mt-5 font-display text-[2rem] font-bold leading-tight tracking-[-0.03em] text-slate-900 dark:text-white">{declined ? 'Your request wasn’t accepted' : 'Waiting for the head to accept'}</h1>
+      <p className="mt-2 text-[15px] leading-relaxed text-slate-500 dark:text-slate-400">
+        {declined
+          ? <>The head of <b className="text-slate-800 dark:text-slate-200">{pending.schoolName}</b> declined this request. If that’s a mistake, ask the school office and try again.</>
+          : <>Your request to join <b className="text-slate-800 dark:text-slate-200">{pending.schoolName}</b> as {REQUEST_ROLES.find((r) => r.role === pending.role)?.label.toLowerCase()} has been sent. Keep this page open — it opens the school by itself the moment you’re accepted.</>}
+      </p>
+      <div className="mt-6 rounded-xl border border-slate-200 bg-white p-4 text-sm dark:border-white/10 dark:bg-white/[0.03]">
+        <p className="text-slate-500 dark:text-slate-400">Signed up as</p>
+        <p className="font-semibold text-slate-900 dark:text-white">{pending.name} · {pending.email}</p>
+      </div>
+      <div className="mt-6 flex gap-2">
+        <Button variant="outline" onClick={async () => { await cancelRequest(); nav('/login'); }}>{declined ? 'Close' : 'Cancel request'}</Button>
+      </div>
     </Frame>
   );
 }

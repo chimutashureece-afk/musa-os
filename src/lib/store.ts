@@ -30,6 +30,16 @@ class Store {
     old.forEach((e) => e.listeners.forEach((l) => l()));
   }
 
+  /** Disconnect everything (before signing out) so no listener fires without a login. */
+  reset() {
+    this.entries.forEach((e) => e.unsub?.());
+    const old = this.entries;
+    this.entries = new Map();
+    this.backend = null;
+    this.profile = null;
+    old.forEach((e) => e.listeners.forEach((l) => l()));
+  }
+
   get kind() { return this.backend?.kind ?? 'local'; }
   get user() { return this.profile; }
 
@@ -45,7 +55,7 @@ class Store {
           ent.loaded = true;
           ent.snapshot = { data: docs, loading: false };
           ent.listeners.forEach((l) => l());
-        }, (err) => this.onError?.(`Could not load ${col}: ${err.message}`));
+        }, (err) => { if (this.backend && this.profile) this.onError?.(`Could not load ${col}: ${err.message}`); });
       }
     }
     return e;

@@ -11,6 +11,7 @@ import { useAuth } from '../context/AuthContext';
 import { SCHOOL_TYPES } from '../lib/defaults';
 import { Section } from '../types';
 import { restartTour } from '../components/Tour';
+import { friendlyAuthError } from '../lib/authErrors';
 import { MusaLogo, MusaMark } from '../components/Logo';
 import { Role } from '../types';
 import { cx } from '../lib/utils';
@@ -372,7 +373,13 @@ export default function Login() {
   const [picker, setPicker] = useState(false);
   const [demoType, setDemoType] = useState<Section>('secondary');
   const openDemo = () => { setWatch(false); setPicker(true); };
-  const launch = () => { restartTour(); startDemo(demoType); nav('/', { replace: true }); };
+  const [launching, setLaunching] = useState(false);
+  const [demoErr, setDemoErr] = useState<string | null>(null);
+  const launch = async () => {
+    setDemoErr(null); setLaunching(true);
+    try { restartTour(); await startDemo(demoType); nav('/', { replace: true }); }
+    catch (e) { setDemoErr(friendlyAuthError(e)); setLaunching(false); }
+  };
   const [wordIdx, setWordIdx] = useCycle(WORDS.length, 4000);
   const [statsRef, statsSeen] = useInView<HTMLDListElement>();
   const [stampRef, stampSeen] = useInView<HTMLDivElement>({ threshold: 0.4 });
@@ -503,7 +510,7 @@ export default function Login() {
           <div className="mt-12 flex flex-col items-start justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-6 sm:flex-row sm:items-center dark:border-white/[0.08] dark:bg-ink-800">
             <div>
               <p className="font-display text-lg font-semibold tracking-tight text-slate-900 dark:text-white">See it before you sign up.</p>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Watch a 40-second walkthrough, or open an empty practice school with a guide beside you.</p>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Watch a 40-second walkthrough, or open an empty demo school with a guide beside you.</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button size="lg" variant="outline" onClick={() => setWatch(true)} icon={<PlayCircle size={16} />}>Watch how it works</Button>
@@ -544,8 +551,8 @@ export default function Login() {
       <Walkthrough open={watch} onClose={() => setWatch(false)} onTry={openDemo} />
 
       <Modal open={picker} onClose={() => setPicker(false)} size="sm" title="Try Musa OS"
-        footer={<><Button variant="outline" onClick={() => setPicker(false)}>Cancel</Button><Button onClick={launch} icon={<ArrowRight size={15} />}>Open practice school</Button></>}>
-        <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-300">You’ll get an <b className="font-semibold text-slate-900 dark:text-white">empty</b> practice school and a guide that walks you through setting it up. It stays in this browser — nothing is saved online.</p>
+        footer={<><Button variant="outline" onClick={() => setPicker(false)}>Cancel</Button><Button onClick={launch} loading={launching} icon={<ArrowRight size={15} />}>Start the demo</Button></>}>
+        <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-300">We’ll make you a private demo account with an <b className="font-semibold text-slate-900 dark:text-white">empty</b> school, and a guide walks you through setting it up. Everything you add is saved, and you can switch between head, teacher, bursar, parent and learner views.</p>
         <div role="radiogroup" aria-label="School type" className="mt-4 space-y-2">
           {(Object.keys(SCHOOL_TYPES) as Section[]).map((k) => (
             <button key={k} type="button" role="radio" aria-checked={demoType === k} onClick={() => setDemoType(k)}
@@ -556,6 +563,7 @@ export default function Login() {
             </button>
           ))}
         </div>
+        {demoErr && <p role="alert" className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200">{demoErr}</p>}
       </Modal>
     </div>
   );

@@ -1,4 +1,4 @@
-import {LayoutDashboard, Users, UserSquare2, School, CalendarClock, ClipboardCheck, BookOpenCheck, FileText, PenLine, Wallet, Megaphone, CalendarDays, Library, ShieldCheck, Settings, Receipt} from 'lucide-react';
+import {Rocket, LayoutDashboard, Users, UserSquare2, School, CalendarClock, ClipboardCheck, BookOpenCheck, FileText, PenLine, Wallet, Megaphone, CalendarDays, Library, ShieldCheck, Settings, Receipt} from 'lucide-react';
 import { Role } from './types';
 
 export interface NavItem { to: string; label: string; icon: any; roles: Role[]; badge?: string }
@@ -8,7 +8,7 @@ const STAFF: Role[] = ['admin', 'teacher', 'bursar'];
 const ALL: Role[] = ['admin', 'teacher', 'bursar', 'parent', 'student'];
 
 export const NAV: NavGroup[] = [
-  { label: 'Overview', items: [{ to: '/', label: 'Dashboard', icon: LayoutDashboard, roles: ALL }] },
+  { label: 'Overview', items: [{ to: '/setup', label: 'Get started', icon: Rocket, roles: ['admin'] }, { to: '/', label: 'Dashboard', icon: LayoutDashboard, roles: ALL }] },
   {
     label: 'People',
     items: [
