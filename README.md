@@ -28,7 +28,12 @@ npm install
 npm run dev        # http://localhost:3000
 ```
 
-Musa OS needs a Firebase project — there is no offline or sample-data mode. Without the `VITE_FIREBASE_*` keys the sign-in and sign-up pages show a setup notice.
+Musa OS needs a Firebase project for real schools. Without the `VITE_FIREBASE_*` keys the sign-in and sign-up pages show a setup notice.
+
+**Demo.** The landing page offers two ways to look around without an account:
+
+- **Watch how it works** — a 40-second animated walkthrough (create a class, enrol, register, marks, fees, reports).
+- **Try the demo** — opens an *empty* practice school (primary or secondary) kept only in the browser's local storage, with a guided tour that ticks off each step as the user does it. No sample data is ever inserted; leaving the demo wipes it.
 
 ## Set up Firebase
 

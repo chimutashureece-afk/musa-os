@@ -1,0 +1,28 @@
+gh.exe : 
+At line:1 char:1
++ & gh auth login 
+--web --hostname 
+github.com -p https 
+2>&1 | Out-File  ...
++ ~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~
+    + CategoryInfo     
+         : NotSpecifi  
+  ed: (:String) [],    
+ RemoteException
+    + FullyQualifiedEr 
+   rorId : NativeComm  
+  andError
+ 
+! One-time code 
+(0EB4-673C) copied to 
+clipboard
+Open this URL to 
+continue in your web 
+browser: https://github
+.com/login/device
+failed to authenticate 
+via web browser: 
+context deadline 
+exceeded

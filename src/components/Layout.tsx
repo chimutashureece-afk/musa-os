@@ -6,6 +6,7 @@ import { useAuth, useSettings } from '../context/AuthContext';
 import { ROLE_LABELS, Role } from '../types';
 import { Avatar, Badge } from './ui';
 import { MusaMark } from './Logo';
+import { Tour, restartTour } from './Tour';
 import { cx, currentTerm, fullName } from '../lib/utils';
 import { useCollection, useIndex } from '../lib/store';
 import { isStaffRole } from '../lib/permissions';
@@ -110,8 +111,26 @@ const QuickSearch: React.FC = () => {
   );
 };
 
+/** Thin strip across the top of the practice school. */
+const DemoBar: React.FC<{ onTour: () => void }> = ({ onTour }) => {
+  const { endDemo } = useAuth();
+  const nav = useNavigate();
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 bg-brand-950 px-4 py-2 text-center text-[13px] text-white/80 dark:bg-ink-950 dark:text-white/70 no-print">
+      <span><b className="font-semibold text-white">Practice school</b> · kept in this browser only, never sent online</span>
+      <span className="flex items-center gap-3">
+        <button onClick={onTour} className="font-semibold text-white underline-offset-4 hover:underline">Restart tour</button>
+        <button onClick={() => { endDemo(); nav('/signup'); }} className="font-semibold text-marigold-300 underline-offset-4 hover:underline">Create my real school</button>
+        <button onClick={() => { endDemo(); nav('/login'); }} className="text-white/60 underline-offset-4 hover:text-white hover:underline">Leave</button>
+      </span>
+    </div>
+  );
+};
+
 export const Layout: React.FC = () => {
-  const { profile } = useAuth();
+  const { profile, mode, endDemo } = useAuth();
+  const nav = useNavigate();
+  const [tourKey, setTourKey] = useState(0);
   const settings = useSettings();
   const { dark, toggle } = useTheme();
   const [drawer, setDrawer] = useState(false);
@@ -137,6 +156,7 @@ export const Layout: React.FC = () => {
       )}
 
       <div className="lg:pl-60">
+        {mode === 'demo' && <DemoBar onTour={() => { restartTour(); setTourKey((k) => k + 1); nav('/'); }} />}
         <header className="app-header sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-slate-200/80 bg-paper-50/85 px-4 backdrop-blur-md md:px-8 dark:border-white/[0.06] dark:bg-ink-900/85 no-print">
           <button onClick={() => setDrawer(true)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 lg:hidden dark:hover:bg-white/5 dark:text-slate-400" aria-label="Open menu"><Menu size={20} /></button>
           {profile && isStaffRole(profile.role) ? <QuickSearch /> : <div className="flex-1" />}
@@ -148,6 +168,7 @@ export const Layout: React.FC = () => {
         <main className="mx-auto max-w-[1360px] px-4 py-6 md:px-8 md:py-9">
           <Outlet />
         </main>
+        {mode === 'demo' && <Tour key={tourKey} onFinish={() => { endDemo(); nav('/signup'); }} />}
       </div>
     </div>
   );

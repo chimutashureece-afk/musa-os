@@ -25,3 +25,6 @@ dist-ssr
 
 .env
 dist-demo
+
+.vercel
+.env*

@@ -33,6 +33,93 @@ const applyScope = (docs: AnyDoc[], scope: Scope): AnyDoc[] => {
   return docs.filter((d) => set.has(d[scope.field]));
 };
 
+// ======================================================= PRACTICE (demo) ==
+// The demo is a blank practice school kept only in this browser — no sample data.
+const LS_PREFIX = 'musa-demo:v1:';
+
+export class LocalBackend implements Backend {
+  kind = 'local' as const;
+  private mem = new Map<CollectionName, Map<string, AnyDoc>>();
+  private listeners = new Map<CollectionName, Set<() => void>>();
+
+  constructor() {
+    window.addEventListener('storage', (e) => {
+      if (!e.key?.startsWith(LS_PREFIX)) return;
+      const col = e.key.slice(LS_PREFIX.length) as CollectionName;
+      this.mem.delete(col);
+      this.listeners.get(col)?.forEach((l) => l());
+    });
+  }
+
+  static hasData(): boolean {
+    try { return localStorage.getItem(LS_PREFIX + 'settings') !== null; } catch { return false; }
+  }
+
+  static clearAll() {
+    try {
+      Object.keys(localStorage).filter((k) => k.startsWith(LS_PREFIX)).forEach((k) => localStorage.removeItem(k));
+    } catch { /* ignore */ }
+  }
+
+  private load(col: CollectionName): Map<string, AnyDoc> {
+    let m = this.mem.get(col);
+    if (!m) {
+      m = new Map();
+      try {
+        const raw = localStorage.getItem(LS_PREFIX + col);
+        if (raw) for (const d of JSON.parse(raw) as AnyDoc[]) m.set(d.id, d);
+      } catch { /* ignore */ }
+      this.mem.set(col, m);
+    }
+    return m;
+  }
+
+  private persist(col: CollectionName) {
+    const m = this.load(col);
+    try {
+      localStorage.setItem(LS_PREFIX + col, JSON.stringify([...m.values()]));
+    } catch (e) {
+      console.error('Local storage is full or unavailable', e);
+      throw new Error('Browser storage is full. Restart the demo to clear it.');
+    }
+  }
+
+  subscribe(col: CollectionName, profile: UserProfile | null, cb: (docs: AnyDoc[]) => void) {
+    const emit = () => cb(applyScope([...this.load(col).values()], scopeFor(col, profile)));
+    let set = this.listeners.get(col);
+    if (!set) { set = new Set(); this.listeners.set(col, set); }
+    set.add(emit);
+    queueMicrotask(emit);
+    return () => { set!.delete(emit); };
+  }
+
+  async commit(ops: WriteOp[]) {
+    const touched = new Set<CollectionName>();
+    for (const o of ops) {
+      const m = this.load(o.col);
+      if (o.op === 'set') m.set(o.id, stripUndefined({ ...o.data, id: o.id }));
+      else if (o.op === 'update') {
+        const prev = m.get(o.id);
+        if (prev) m.set(o.id, stripUndefined({ ...prev, ...o.data, id: o.id }));
+      } else m.delete(o.id);
+      touched.add(o.col);
+    }
+    touched.forEach((c) => this.persist(c));
+    touched.forEach((c) => this.listeners.get(c)?.forEach((l) => l()));
+  }
+
+  /** Raw write used by seeding / backup import. */
+  replaceAll(data: Partial<Record<CollectionName, AnyDoc[]>>) {
+    for (const [col, docs] of Object.entries(data) as [CollectionName, AnyDoc[]][]) {
+      const m = new Map<string, AnyDoc>();
+      docs.forEach((d) => m.set(d.id, d));
+      this.mem.set(col, m);
+      this.persist(col);
+      this.listeners.get(col)?.forEach((l) => l());
+    }
+  }
+}
+
 // ========================================================= FIRESTORE =========
 export class FirestoreBackend implements Backend {
   kind = 'firebase' as const;

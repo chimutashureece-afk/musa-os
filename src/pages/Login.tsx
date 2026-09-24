@@ -1,11 +1,16 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   ShieldCheck, BookOpenCheck, Wallet, Users, UserRound, ArrowRight, Moon, Sun,
-  ClipboardCheck, CalendarClock, FileText, Receipt, Megaphone, Library, PenLine, UserPlus, Check,
+  ClipboardCheck, CalendarClock, PlayCircle, FileText, Receipt, Megaphone, Library, PenLine, UserPlus, Check,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { Button } from '../components/ui';
+import { Button, Modal } from '../components/ui';
 import { useTheme } from '../components/Layout';
+import { Walkthrough } from '../components/Walkthrough';
+import { useAuth } from '../context/AuthContext';
+import { SCHOOL_TYPES } from '../lib/defaults';
+import { Section } from '../types';
+import { restartTour } from '../components/Tour';
 import { MusaLogo, MusaMark } from '../components/Logo';
 import { Role } from '../types';
 import { cx } from '../lib/utils';
@@ -361,7 +366,13 @@ const ProductPreview: React.FC<{ index: number; onPick: (i: number) => void }> =
 
 export default function Login() {
   const nav = useNavigate();
+  const { startDemo } = useAuth();
   const { dark, toggle } = useTheme();
+  const [watch, setWatch] = useState(false);
+  const [picker, setPicker] = useState(false);
+  const [demoType, setDemoType] = useState<Section>('secondary');
+  const openDemo = () => { setWatch(false); setPicker(true); };
+  const launch = () => { restartTour(); startDemo(demoType); nav('/', { replace: true }); };
   const [wordIdx, setWordIdx] = useCycle(WORDS.length, 4000);
   const [statsRef, statsSeen] = useInView<HTMLDListElement>();
   const [stampRef, stampSeen] = useInView<HTMLDivElement>({ threshold: 0.4 });
@@ -380,11 +391,12 @@ export default function Login() {
             <button className={navLink} onClick={() => scrollTo('modules')}>Modules</button>
             <button className={navLink} onClick={() => scrollTo('acegrader')}>AceGrader</button>
             <button className={navLink} onClick={() => scrollTo('roles')}>Who it’s for</button>
+            <button className={navLink} onClick={openDemo}>Demo</button>
           </nav>
           <div className="ml-auto flex items-center gap-2">
             <button onClick={toggle} aria-label="Toggle theme" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-white/5">{dark ? <Sun size={17} /> : <Moon size={17} />}</button>
             <Button variant="outline" onClick={() => nav('/signin')}>Sign in</Button>
-            <Button onClick={() => nav('/signup')} className="hidden sm:inline-flex">Get started</Button>
+            <span className="hidden sm:block"><Button onClick={() => nav('/signup')}>Get started</Button></span>
           </div>
         </div>
       </header>
@@ -402,7 +414,10 @@ export default function Login() {
             </p>
             <div style={{ animationDelay: '220ms' }} className="mt-8 flex animate-slide-up flex-wrap items-center gap-3">
               <Button size="lg" onClick={() => nav('/signup')} icon={<ArrowRight size={16} />}>Set up your school</Button>
-              <Button size="lg" variant="outline" onClick={() => nav('/signin')}>Sign in</Button>
+              <Button size="lg" variant="outline" onClick={openDemo}>Try the demo</Button>
+              <button onClick={() => setWatch(true)} className="group inline-flex items-center gap-2 px-1 text-sm font-semibold text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white">
+                <PlayCircle size={20} className="text-brand-700 transition group-hover:scale-110 dark:text-brand-300" /> Watch how it works
+              </button>
             </div>
             <dl ref={statsRef} className="mt-10 grid max-w-lg grid-cols-3 gap-6 border-t border-slate-200 pt-6 dark:border-white/[0.08]">
               {([[14, 'modules working together'], [5, 'role-based logins'], [3, 'ZIMSEC grading scales']] as const).map(([k, v]) => (
@@ -487,10 +502,13 @@ export default function Login() {
           </div>
           <div className="mt-12 flex flex-col items-start justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-6 sm:flex-row sm:items-center dark:border-white/[0.08] dark:bg-ink-800">
             <div>
-              <p className="font-display text-lg font-semibold tracking-tight text-slate-900 dark:text-white">Primary or secondary — set up in a minute.</p>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Choose your school type and Musa OS adds the right levels, subjects and grading.</p>
+              <p className="font-display text-lg font-semibold tracking-tight text-slate-900 dark:text-white">See it before you sign up.</p>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Watch a 40-second walkthrough, or open an empty practice school with a guide beside you.</p>
             </div>
-            <Button size="lg" onClick={() => nav('/signup')} icon={<ArrowRight size={16} />}>Create your school</Button>
+            <div className="flex flex-wrap gap-2">
+              <Button size="lg" variant="outline" onClick={() => setWatch(true)} icon={<PlayCircle size={16} />}>Watch how it works</Button>
+              <Button size="lg" onClick={openDemo} icon={<ArrowRight size={16} />}>Try the demo</Button>
+            </div>
           </div>
         </div>
       </section>
@@ -523,6 +541,22 @@ export default function Login() {
         </div>
       </footer>
 
+      <Walkthrough open={watch} onClose={() => setWatch(false)} onTry={openDemo} />
+
+      <Modal open={picker} onClose={() => setPicker(false)} size="sm" title="Try Musa OS"
+        footer={<><Button variant="outline" onClick={() => setPicker(false)}>Cancel</Button><Button onClick={launch} icon={<ArrowRight size={15} />}>Open practice school</Button></>}>
+        <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-300">You’ll get an <b className="font-semibold text-slate-900 dark:text-white">empty</b> practice school and a guide that walks you through setting it up. It stays in this browser — nothing is saved online.</p>
+        <div role="radiogroup" aria-label="School type" className="mt-4 space-y-2">
+          {(Object.keys(SCHOOL_TYPES) as Section[]).map((k) => (
+            <button key={k} type="button" role="radio" aria-checked={demoType === k} onClick={() => setDemoType(k)}
+              className={cx('flex w-full items-center gap-3 rounded-xl border p-3 text-left transition',
+                demoType === k ? 'border-brand-600 ring-[3px] ring-brand-600/15 dark:border-brand-400 dark:ring-brand-400/15' : 'border-slate-200 hover:border-slate-300 dark:border-white/10 dark:hover:border-white/20')}>
+              <span className={cx('flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-[1.5px]', demoType === k ? 'border-brand-700 bg-brand-700 dark:border-brand-400 dark:bg-brand-400' : 'border-slate-300 dark:border-white/25')}>{demoType === k && <span className="h-1.5 w-1.5 rounded-full bg-white dark:bg-ink-950" />}</span>
+              <span><span className="block text-sm font-semibold text-slate-900 dark:text-white">{SCHOOL_TYPES[k].label}</span><span className="text-xs text-slate-500 dark:text-slate-400">{SCHOOL_TYPES[k].levels}</span></span>
+            </button>
+          ))}
+        </div>
+      </Modal>
     </div>
   );
 }

@@ -8,19 +8,9 @@ import { MusaLogo } from '../components/Logo';
 import { SCHOOL_TYPES } from '../lib/defaults';
 import { Section } from '../types';
 import { cx } from '../lib/utils';
+import { friendlyAuthError } from '../lib/authErrors';
 
-function friendly(e: any): string {
-  const c = e?.code as string | undefined;
-  if (c === 'auth/invalid-credential' || c === 'auth/wrong-password' || c === 'auth/user-not-found') return 'Incorrect email or password.';
-  if (c === 'auth/invalid-email') return 'That email address doesn’t look right.';
-  if (c === 'auth/email-already-in-use') return 'An account with this email already exists. Sign in instead.';
-  if (c === 'auth/weak-password') return 'Use a password of at least 6 characters.';
-  if (c === 'auth/too-many-requests') return 'Too many attempts. Wait a few minutes and try again.';
-  if (c === 'auth/network-request-failed') return 'No connection. Check your internet and try again.';
-  if (c === 'auth/operation-not-allowed') return 'Email sign-in is not enabled for this Firebase project yet.';
-  if (c === 'permission-denied' || /insufficient permissions/i.test(e?.message ?? '')) return 'The database refused the request. Make sure the Firestore security rules are deployed.';
-  return e?.message ?? 'Something went wrong. Please try again.';
-}
+const friendly = friendlyAuthError;
 
 // --------------------------------------------------------------- frame --
 const Frame: React.FC<{ children: React.ReactNode; aside: React.ReactNode }> = ({ children, aside }) => {
