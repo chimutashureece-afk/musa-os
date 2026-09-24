@@ -1,0 +1,58 @@
+rules_version = '2';
+// Musa OS security rules — mirrors src/lib/permissions.ts
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function me() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function member(schoolId) { return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && me().schoolId == schoolId && me().get('disabled', false) != true; }
+    function role() { return me().role; }
+    function isStaff() { return role() in ['admin', 'teacher', 'bursar']; }
+    function isFamily() { return role() in ['parent', 'student']; }
+    function myStudent(id) { return id in me().get('studentIds', []); }
+
+    // ---------------------------------------------------------------- users --
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || (member(resource.data.schoolId) && role() == 'admin'));
+      // first admin of a brand-new school (created in the same batch as the school doc)
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.role == 'admin'
+        && !exists(/databases/$(database)/documents/schools/$(request.resource.data.schoolId))
+        && getAfter(/databases/$(database)/documents/schools/$(request.resource.data.schoolId)).data.ownerUid == request.auth.uid;
+      // admins manage accounts in their own school
+      allow create, update: if member(request.resource.data.schoolId) && role() == 'admin';
+      allow delete: if member(resource.data.schoolId) && role() == 'admin';
+    }
+
+    // --------------------------------------------------------------- school --
+    match /schools/{schoolId} {
+      allow read: if member(schoolId);
+      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid && !exists(/databases/$(database)/documents/schools/$(schoolId));
+      allow update: if member(schoolId) && role() == 'admin';
+
+      // settings: first write happens in the create batch
+      match /settings/{doc} {
+        allow read: if member(schoolId);
+        allow write: if (member(schoolId) && role() == 'admin')
+          || (signedIn() && getAfter(/databases/$(database)/documents/schools/$(schoolId)).data.ownerUid == request.auth.uid);
+      }
+
+      // readable by every member of the school
+      match /{col}/{doc} {
+        allow read: if member(schoolId) && (
+          col in ['classes', 'subjects', 'staff', 'allocations', 'timetable', 'assessments', 'events', 'announcements', 'books', 'feeStructures']
+          || (isStaff() && !(col in ['invoices', 'payments']) && !(role() == 'bursar' && col in ['rubrics', 'submissions', 'corrections']))
+          || (isStaff() && col in ['invoices', 'payments'] && role() in ['admin', 'bursar'])
+          || (isFamily() && col == 'students' && myStudent(doc))
+          || (isFamily() && col in ['marks', 'invoices', 'payments', 'incidents', 'loans', 'reports', 'remarks', 'submissions'] && myStudent(resource.data.studentId))
+          || (isFamily() && col == 'attendance' && resource.data.classId in me().get('classIds', []))
+        );
+        allow write: if member(schoolId) && (
+          role() == 'admin'
+          || (role() == 'teacher' && col in ['attendance', 'assessments', 'marks', 'remarks', 'incidents', 'rubrics', 'submissions', 'corrections', 'announcements', 'books', 'loans'])
+          || (role() == 'bursar' && col in ['feeStructures', 'invoices', 'payments', 'announcements'])
+        );
+      }
+    }
+  }
+}

@@ -1,0 +1,195 @@
+@import "tailwindcss";
+
+/* Dark variant never applies inside printable paper documents. */
+@custom-variant dark (&:where(.dark, .dark *):not(:where(.paper, .paper *, .print-only, .print-only *)));
+
+@theme {
+  /* Typography: Bricolage Grotesque for display, Instrument Sans for UI,
+     Source Serif for printed documents & scripts, Kalam for marking notes. */
+  --font-sans: "Instrument Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Bricolage Grotesque", "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --font-hand: "Kalam", "Comic Sans MS", cursive;
+
+  /* Musa green — taken from the Musa OS logo */
+  --color-brand-50: #edfbf2;
+  --color-brand-100: #d2f5de;
+  --color-brand-200: #a7e9bf;
+  --color-brand-300: #6dd596;
+  --color-brand-400: #33bb68;
+  --color-brand-500: #16a04c;
+  --color-brand-600: #0e833e;
+  --color-brand-700: #0c6834;
+  --color-brand-800: #0c532c;
+  --color-brand-900: #0b4427;
+  --color-brand-950: #032619;
+
+  /* Neutrals with a faint green bias (replaces Tailwind's blue-grey slate) */
+  --color-slate-50: #f5f8f6;
+  --color-slate-100: #edf1ef;
+  --color-slate-200: #dfe5e2;
+  --color-slate-300: #c4cec9;
+  --color-slate-400: #8f9f97;
+  --color-slate-500: #647570;
+  --color-slate-600: #4a5953;
+  --color-slate-700: #35423d;
+  --color-slate-800: #222c28;
+  --color-slate-900: #131b18;
+  --color-slate-950: #0a100d;
+
+  /* Marigold — highlights, the AceGrader accent, "attention" */
+  --color-marigold-50: #fff8eb;
+  --color-marigold-100: #feecc7;
+  --color-marigold-200: #fdd88a;
+  --color-marigold-300: #fbbf4d;
+  --color-marigold-400: #f5a623;
+  --color-marigold-500: #e08a0b;
+  --color-marigold-600: #bd6a07;
+  --color-marigold-700: #964d0a;
+  --color-marigold-800: #7a3f0c;
+  --color-marigold-900: #65340e;
+  --color-marigold-950: #3a1a04;
+
+  --color-paper-50: #f4f7f5;
+  --color-paper-100: #ebf0ed;
+  --color-paper-200: #dde4e0;
+
+  /* Dark theme surfaces: page < card < raised. Slightly green-tinted charcoal. */
+  --color-ink-950: #080c0b;
+  --color-ink-900: #0e1412;
+  --color-ink-800: #151d1a;
+  --color-ink-700: #1c2622;
+  --color-ink-600: #25312c;
+
+  --radius-xl: 0.625rem;
+  --radius-2xl: 0.875rem;
+
+  --animate-fade-in: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-slide-up: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-stamp: stamp 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+
+  --animate-word-in: wordIn .6s cubic-bezier(.16,1,.3,1) both;
+  --animate-word-out: wordOut .5s cubic-bezier(.7,0,.84,0) both;
+  --animate-draw: draw .9s .15s cubic-bezier(.65,0,.35,1) both;
+  --animate-pop: pop .35s cubic-bezier(.34,1.56,.64,1) both;
+  --animate-screen-in: screenIn .5s cubic-bezier(.16,1,.3,1) both;
+  --animate-progress: progress 4s linear both;
+  --animate-bob: bob 6s ease-in-out infinite;
+  --animate-marquee: marquee 45s linear infinite;
+  --animate-grow: grow .9s cubic-bezier(.16,1,.3,1) both;
+  --animate-write: write 1.1s steps(28, end) both;
+
+  --animate-page-turn: pageTurn .9s cubic-bezier(.45,.05,.35,1) both;
+  --animate-page-shade: pageShade .9s cubic-bezier(.45,.05,.35,1) both;
+  --animate-page-under: pageUnder .9s ease-out both;
+  --animate-page-spine: pageSpine .9s ease-out both;
+  @keyframes pageTurn { 0% { transform: rotateY(0deg); box-shadow: 0 0 0 rgba(0,0,0,0) } 40% { box-shadow: 18px 0 30px rgba(6,20,15,.18) } 100% { transform: rotateY(-100deg); box-shadow: 30px 0 40px rgba(6,20,15,0) } }
+  @keyframes pageShade { from { opacity: 0 } 60% { opacity: 1 } to { opacity: 1 } }
+  @keyframes pageUnder { from { opacity: .55; transform: translateX(6px) } to { opacity: 1; transform: none } }
+  @keyframes pageSpine { 0% { opacity: 0 } 45% { opacity: 1 } 100% { opacity: 0 } }
+
+  --animate-ink: ink .45s cubic-bezier(.2,.8,.2,1) both;
+  --animate-circle: circle .5s cubic-bezier(.34,1.56,.64,1) both;
+  @keyframes ink { from { opacity: 0; clip-path: inset(0 100% 0 0); } to { opacity: 1; clip-path: inset(0 0 0 0); } }
+  @keyframes circle { from { opacity: 0; transform: scale(1.8) rotate(-40deg); } to { opacity: 1; transform: none; } }
+
+  @keyframes wordIn { from { transform: translateY(105%) } to { transform: translateY(0) } }
+  @keyframes wordOut { from { transform: translateY(0); opacity: 1 } to { transform: translateY(-105%); opacity: 0 } }
+  @keyframes draw { from { stroke-dashoffset: 1 } to { stroke-dashoffset: 0 } }
+  @keyframes pop { 0% { transform: scale(.6); opacity: .2 } 100% { transform: scale(1); opacity: 1 } }
+  @keyframes screenIn { from { opacity: 0; transform: translateY(10px) } to { opacity: 1; transform: none } }
+  @keyframes progress { from { width: 0 } to { width: 100% } }
+  @keyframes bob { 0%, 100% { transform: rotate(-2deg) translateY(0) } 50% { transform: rotate(-1deg) translateY(-8px) } }
+  @keyframes marquee { from { transform: translateX(0) } to { transform: translateX(-50%) } }
+  @keyframes grow { from { transform: scaleX(0) } to { transform: scaleX(1) } }
+  @keyframes write { from { max-width: 0 } to { max-width: 20rem } }
+
+  @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+  @keyframes slideUp { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: none } }
+  @keyframes stamp { 0% { opacity: 0; transform: scale(3) rotate(-15deg) } 100% { opacity: .9; transform: scale(1) rotate(-15deg) } }
+}
+
+@layer base {
+  html { -webkit-font-smoothing: antialiased; }
+  body {
+    @apply bg-paper-50 text-slate-800 dark:bg-ink-900 dark:text-slate-200 font-sans;
+    font-feature-settings: "ss01", "cv11";
+    transition: background-color .3s ease, color .3s ease;
+  }
+  ::selection { @apply bg-marigold-200 text-slate-900; }
+  h1, h2, h3 { text-wrap: balance; }
+  :focus-visible { outline: 2px solid var(--color-brand-500); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: #c4cec9; border-radius: 10px; }
+  .dark ::-webkit-scrollbar-thumb { background: #26322d; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  .dark { color-scheme: dark; }
+  .dark body { @apply text-slate-300; }
+  .dark ::selection { @apply bg-marigold-400/30 text-white; }
+  input[type='number']::-webkit-inner-spin-button { opacity: .4; }
+}
+
+@layer components {
+  .input {
+    @apply h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder-slate-400 outline-none transition
+      hover:border-slate-300
+      focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15
+      disabled:opacity-60
+      dark:border-white/10 dark:bg-white/[0.03] dark:text-white dark:placeholder-slate-500 dark:hover:border-white/20 dark:focus:border-brand-400;
+  }
+  textarea.input { @apply h-auto py-2; }
+  .label { @apply mb-1.5 block text-xs font-medium text-slate-600 dark:text-slate-400; }
+  .card { @apply rounded-2xl border border-slate-200/90 bg-white dark:border-white/[0.08] dark:bg-ink-800 dark:shadow-[inset_0_1px_0_rgba(255,255,255,.03)]; }
+  .th { @apply whitespace-nowrap border-b border-slate-200 bg-slate-50/80 px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-500 dark:border-white/[0.07] dark:bg-white/[0.02] dark:text-slate-400; }
+  .td { @apply px-3 py-3 text-sm align-middle; }
+  .tr { @apply border-t border-slate-100 dark:border-white/[0.05]; }
+  .tr-hover { @apply hover:bg-brand-50/40 dark:hover:bg-white/[0.03]; }
+  .chip { @apply inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-semibold; }
+  .link { @apply font-medium text-brand-700 hover:underline dark:text-brand-300; }
+  .num { font-variant-numeric: tabular-nums; }
+  .paper { color-scheme: light; color: #131b18; }
+}
+
+/* ---------------------------------------------------------------- charts */
+.recharts-default-tooltip { border-radius: 10px !important; border: 1px solid var(--color-slate-200) !important; box-shadow: 0 6px 20px rgba(19,27,24,.08); font-size: 12px; }
+.dark .recharts-default-tooltip { background: var(--color-ink-700) !important; border-color: rgba(255,255,255,.1) !important; color: var(--color-slate-200); box-shadow: 0 8px 24px rgba(0,0,0,.4); }
+.dark .recharts-tooltip-label { color: var(--color-slate-100) !important; }
+.dark .recharts-cartesian-grid line { stroke: rgba(255,255,255,.06); }
+.dark .recharts-tooltip-cursor { fill: rgba(255,255,255,.04); }
+
+/* ------------------------------------------------------------------ print */
+.print-only { display: none; }
+@media print {
+  @page { size: A4; margin: 12mm; }
+  html, body { background: #fff !important; color: #000 !important; }
+  .no-print, nav, aside, header.app-header { display: none !important; }
+  .print-only { display: block !important; }
+  main { margin: 0 !important; padding: 0 !important; }
+  .card { box-shadow: none !important; border-color: #ddd !important; background: #fff !important; }
+  .print-page { page-break-after: always; break-after: page; }
+  .print-page:last-child { page-break-after: auto; break-after: auto; }
+  .dark * { color: #000 !important; }
+}
+
+/* ------------------------------------------------------------------------
+   Unlayered page ground. Kept outside @layer so host/embedding pages that set
+   their own body background or font (unlayered CSS wins over layers) can't
+   leave a light background behind dark-mode text.
+------------------------------------------------------------------------- */
+html, body {
+  background-color: var(--color-paper-50);
+  color: var(--color-slate-800);
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.5;
+}
+html { color-scheme: light; }
+html.dark { color-scheme: dark; }
+html.dark, html.dark body {
+  background-color: var(--color-ink-900);
+  color: var(--color-slate-300);
+}
+@media print {
+  html, body, html.dark, html.dark body { background: #fff !important; color: #000 !important; }
+}
