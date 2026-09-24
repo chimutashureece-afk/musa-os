@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   ShieldCheck, BookOpenCheck, Wallet, Users, UserRound, ArrowRight, Moon, Sun,
-  ClipboardCheck, CalendarClock, PlayCircle, FileText, Receipt, Megaphone, Library, PenLine, UserPlus, Check,
+  ClipboardCheck, CalendarClock, PlayCircle, MonitorDown, Download, FileText, Receipt, Megaphone, Library, PenLine, UserPlus, Check,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Modal } from '../components/ui';
@@ -12,6 +12,7 @@ import { SCHOOL_TYPES } from '../lib/defaults';
 import { Section } from '../types';
 import { restartTour } from '../components/Tour';
 import { friendlyAuthError } from '../lib/authErrors';
+import { WINDOWS_DOWNLOAD_URL, useInstall } from '../lib/device';
 import { MusaLogo, MusaMark } from '../components/Logo';
 import { Role } from '../types';
 import { cx } from '../lib/utils';
@@ -368,6 +369,7 @@ const ProductPreview: React.FC<{ index: number; onPick: (i: number) => void }> =
 export default function Login() {
   const nav = useNavigate();
   const { startDemo } = useAuth();
+  const install = useInstall();
   const { dark, toggle } = useTheme();
   const [watch, setWatch] = useState(false);
   const [picker, setPicker] = useState(false);
@@ -399,6 +401,7 @@ export default function Login() {
             <button className={navLink} onClick={() => scrollTo('acegrader')}>AceGrader</button>
             <button className={navLink} onClick={() => scrollTo('roles')}>Who it’s for</button>
             <button className={navLink} onClick={openDemo}>Demo</button>
+            <button className={navLink} onClick={() => scrollTo('desktop')}>Desktop app</button>
           </nav>
           <div className="ml-auto flex items-center gap-2">
             <button onClick={toggle} aria-label="Toggle theme" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-white/5">{dark ? <Sun size={17} /> : <Moon size={17} />}</button>
@@ -537,6 +540,44 @@ export default function Login() {
               </Reveal>
             ))}
           </ol>
+        </div>
+      </section>
+
+      {/* ------------------------------------------------------- desktop */}
+      <section id="desktop" className="scroll-mt-20 py-20">
+        <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 md:px-6 lg:grid-cols-[1fr_1.1fr]">
+          <div>
+            <h2 className="font-display text-3xl font-bold tracking-[-0.02em] text-slate-900 md:text-4xl dark:text-white">On the office computer, even when the internet drops.</h2>
+            <p className="mt-4 max-w-lg leading-relaxed text-slate-600 dark:text-slate-400">Install Musa OS like any other program — its own window, a taskbar icon and a Start menu entry. Registers, marks and receipts entered offline are kept on the computer and sync by themselves when the connection is back.</p>
+            <div className="mt-7 flex flex-wrap items-center gap-3">
+              {install.installed ? (
+                <span className="inline-flex items-center gap-2 text-sm font-semibold text-brand-800 dark:text-brand-300"><Check size={16} /> Installed on this computer</span>
+              ) : install.canInstall ? (
+                <Button size="lg" onClick={() => install.install()} icon={<MonitorDown size={16} />}>Install on this computer</Button>
+              ) : (
+                <p className="max-w-md rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-300">Open this page in <b>Chrome</b> or <b>Edge</b> and choose <b>Install Musa OS</b> from the address bar (or the ⋮ menu → Cast, save and share → Install).</p>
+              )}
+              {WINDOWS_DOWNLOAD_URL && <Button size="lg" variant="outline" onClick={() => { location.href = WINDOWS_DOWNLOAD_URL; }} icon={<Download size={16} />}>Download for Windows</Button>}
+            </div>
+          </div>
+          <Reveal className="relative">
+            <div className="overflow-hidden rounded-xl border border-slate-300/80 bg-white shadow-[0_30px_60px_-30px_rgba(6,20,15,.45)] dark:border-white/10 dark:bg-ink-800">
+              <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 dark:border-white/[0.08] dark:bg-ink-900">
+                <MusaMark size={16} /><span className="text-xs font-semibold text-slate-700 dark:text-slate-200">Musa OS</span>
+                <span className="ml-auto flex gap-3 text-slate-400"><span>—</span><span>▢</span><span>✕</span></span>
+              </div>
+              <div className="grid grid-cols-[110px_1fr]">
+                <div className="space-y-1 bg-brand-950 p-3 dark:bg-ink-950">{['Dashboard', 'Attendance', 'Gradebook', 'Fees'].map((n, i) => <p key={n} className={cx('rounded px-2 py-1 text-[11px]', i === 1 ? 'bg-white/10 font-semibold text-white' : 'text-white/55')}>{n}</p>)}</div>
+                <div className="p-4">
+                  <p className="flex items-center gap-2 rounded-md bg-marigold-50 px-2.5 py-1.5 text-[11px] text-marigold-900 dark:bg-marigold-400/10 dark:text-marigold-100"><span className="h-1.5 w-1.5 rounded-full bg-marigold-500" />Offline — 3 changes waiting to sync</p>
+                  <div className="mt-3 space-y-1.5">{['Present', 'Present', 'Absent', 'Present'].map((m, i) => (
+                    <div key={i} className="flex items-center justify-between rounded-md border border-slate-100 px-2.5 py-1.5 text-[11px] dark:border-white/[0.06]"><span className="h-2 w-24 rounded bg-slate-200 dark:bg-white/10" /><span className={cx('font-semibold', m === 'Absent' ? 'text-rose-600 dark:text-rose-300' : 'text-brand-700 dark:text-brand-300')}>{m}</span></div>
+                  ))}</div>
+                </div>
+              </div>
+            </div>
+            <div className="mx-auto h-3 w-2/5 rounded-b-lg bg-slate-300/70 dark:bg-white/10" />
+          </Reveal>
         </div>
       </section>
 

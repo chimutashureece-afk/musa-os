@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import {GraduationCap, LogOut, Menu, Moon, Sun, X, Search, ChevronDown, FlaskConical} from 'lucide-react';
+import {MonitorDown, WifiOff, GraduationCap, LogOut, Menu, Moon, Sun, X, Search, ChevronDown, FlaskConical} from 'lucide-react';
 import { navFor } from '../nav';
 import { useAuth, useSettings } from '../context/AuthContext';
 import { ROLE_LABELS, Role } from '../types';
@@ -8,6 +8,7 @@ import { Avatar, Badge, useUI } from './ui';
 import { MusaMark } from './Logo';
 import { Tour, restartTour } from './Tour';
 import { usePendingRequests } from '../lib/joinRequests';
+import { useInstall, useOnline } from '../lib/device';
 import { cx, currentTerm, fullName } from '../lib/utils';
 import { useCollection, useIndex } from '../lib/store';
 import { isStaffRole } from '../lib/permissions';
@@ -185,6 +186,8 @@ export const Layout: React.FC = () => {
   const nav = useNavigate();
   const [tourKey, setTourKey] = useState(0);
   const requests = usePendingRequests(profile);
+  const online = useOnline();
+  const install = useInstall();
   const { toast } = useUI();
   const seen = useRef<Set<string> | null>(null);
   useEffect(() => {
@@ -223,10 +226,20 @@ export const Layout: React.FC = () => {
           <button onClick={() => setDrawer(true)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 lg:hidden dark:hover:bg-white/5 dark:text-slate-400" aria-label="Open menu"><Menu size={20} /></button>
           {profile && isStaffRole(profile.role) ? <QuickSearch /> : <div className="flex-1" />}
           <div className="ml-auto flex items-center gap-2">
+            {install.canInstall && (
+              <button onClick={() => install.install()} className="hidden items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 sm:inline-flex dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200 dark:hover:bg-white/[0.08]" title="Install Musa OS as an app on this computer">
+                <MonitorDown size={14} /> Install app
+              </button>
+            )}
             {term && <Badge tone="blue" className="hidden md:inline-flex">{term.name}</Badge>}
             <button onClick={toggle} className="rounded-full p-2 text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-white/5" aria-label="Toggle theme">{dark ? <Sun size={18} /> : <Moon size={18} />}</button>
           </div>
         </header>
+        {!online && (
+          <div role="status" className="flex items-center justify-center gap-2 border-b border-marigold-300/60 bg-marigold-50 px-4 py-2 text-center text-[13px] text-marigold-900 dark:border-marigold-400/20 dark:bg-marigold-400/10 dark:text-marigold-100 no-print">
+            <WifiOff size={14} className="shrink-0" /> You’re offline. Keep working — registers, marks and payments are saved on this device and sync when the internet is back.
+          </div>
+        )}
         <main className="mx-auto max-w-[1360px] px-4 py-6 md:px-8 md:py-9">
           <Outlet />
         </main>

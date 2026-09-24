@@ -1,0 +1,53 @@
+{
+  "name": "musa-os-desktop",
+  "productName": "Musa OS",
+  "version": "1.0.0",
+  "description": "Musa OS school management \u2014 Windows app",
+  "main": "main.js",
+  "author": "Musa OS",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win nsis --x64",
+    "build:portable": "electron-builder --win portable --x64"
+  },
+  "devDependencies": {
+    "electron": "^38.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "os.musa.school",
+    "productName": "Musa OS",
+    "copyright": "Musa OS",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "offline.html",
+      "config.json",
+      "build/icon.png"
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Musa OS",
+      "artifactName": "MusaOS-Setup-${version}.exe"
+    },
+    "portable": {
+      "artifactName": "MusaOS-${version}-portable.exe"
+    },
+    "publish": null
+  }
+}

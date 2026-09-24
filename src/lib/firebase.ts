@@ -1,6 +1,6 @@
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
 import { getAuth, Auth } from 'firebase/auth';
-import { getFirestore, Firestore } from 'firebase/firestore';
+import { Firestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 
 const env = import.meta.env;
 
@@ -24,7 +24,10 @@ export function getFirebase() {
   if (!app) {
     app = getApps()[0] ?? initializeApp(firebaseConfig);
     auth = getAuth(app);
-    fs = getFirestore(app);
+    // Keep a copy of the school's data on this device so registers and marks can be
+    // entered with no internet; Firestore syncs the changes when the connection returns.
+    try { fs = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) }); }
+    catch { fs = initializeFirestore(app, {}); }
   }
   return { app: app!, auth: auth!, db: fs! };
 }

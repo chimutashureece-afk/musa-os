@@ -28,3 +28,7 @@ dist-demo
 
 .vercel
 .env*
+
+# Windows app build output
+desktop/node_modules
+desktop/release
