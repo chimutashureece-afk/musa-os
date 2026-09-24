@@ -4,32 +4,67 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     function signedIn() { return request.auth != null; }
+    // The people who run Musa OS (keep in step with src/lib/owner.ts). Email must be verified —
+    // they sign in with an emailed link, which verifies it.
+    function isOwner() {
+      return signedIn() && request.auth.token.email_verified == true
+        && request.auth.token.email in ['chimutashureece@gmail.com', 'chimutashutanatswa13@gmail.com'];
+    }
     function me() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
-    function member(schoolId) { return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && me().schoolId == schoolId && me().get('disabled', false) != true; }
+    function school(id) { return get(/databases/$(database)/documents/schools/$(id)).data; }
+    // A demo school locks for everyone in it once its day is over.
+    function schoolOpen(id) { return !(school(id).get('demo', false) == true && request.time.toMillis() > school(id).get('demoExpiresAt', 0)); }
+    function member(schoolId) {
+      return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && me().schoolId == schoolId && me().get('disabled', false) != true && schoolOpen(schoolId);
+    }
     function role() { return me().role; }
     function isStaff() { return role() in ['admin', 'teacher', 'bursar']; }
     function isFamily() { return role() in ['parent', 'student']; }
     function myStudent(id) { return id in me().get('studentIds', []); }
+    function untouched(keys) { return !request.resource.data.diff(resource.data).affectedKeys().hasAny(keys); }
+
+    // The owners can see and fix everything (approve schools, extend or end demos).
+    match /{document=**} {
+      allow read, write: if isOwner();
+    }
 
     // ---------------------------------------------------------------- users --
     match /users/{uid} {
       allow read: if signedIn() && (request.auth.uid == uid || (member(resource.data.schoolId) && role() == 'admin'));
-      // first admin of a brand-new school (created in the same batch as the school doc)
+      // the demo visitor's own profile, created with their demo school in one batch
       allow create: if signedIn() && request.auth.uid == uid
         && request.resource.data.role == 'admin'
+        && request.resource.data.get('demo', false) == true
         && !exists(/databases/$(database)/documents/schools/$(request.resource.data.schoolId))
-        && getAfter(/databases/$(database)/documents/schools/$(request.resource.data.schoolId)).data.ownerUid == request.auth.uid;
-      // admins manage accounts in their own school
-      allow create, update: if member(request.resource.data.schoolId) && role() == 'admin';
+        && getAfter(/databases/$(database)/documents/schools/$(request.resource.data.schoolId)).data.ownerUid == request.auth.uid
+        && getAfter(/databases/$(database)/documents/schools/$(request.resource.data.schoolId)).data.demo == true;
+      // admins manage accounts in their own school (but can't hand out demo powers or change a demo's end)
+      allow create: if member(request.resource.data.schoolId) && role() == 'admin'
+        && request.resource.data.get('demo', false) == false && !('demoExpiresAt' in request.resource.data);
+      allow update: if member(request.resource.data.schoolId) && role() == 'admin' && untouched(['demo', 'demoExpiresAt']);
       // demo schools: the visitor may switch which role they are viewing the school as
       allow update: if signedIn() && request.auth.uid == uid
         && resource.data.get('demo', false) == true
-        && get(/databases/$(database)/documents/schools/$(resource.data.schoolId)).data.get('demo', false) == true
+        && school(resource.data.schoolId).get('demo', false) == true
+        && schoolOpen(resource.data.schoolId)
         && request.resource.data.schoolId == resource.data.schoolId
-        && request.resource.data.get('demo', false) == true
         && request.resource.data.role in ['admin', 'teacher', 'bursar', 'parent', 'student']
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'staffId', 'studentIds', 'classIds']);
       allow delete: if member(resource.data.schoolId) && role() == 'admin';
+    }
+
+    // ---------------------------------------------------- school requests --
+    // schoolRequests/{uid}: a head asking Musa OS for a real school (new, or keeping their demo).
+    match /schoolRequests/{uid} {
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.uid == uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.kind in ['new', 'upgrade']
+        && (request.resource.data.kind == 'new'
+            || school(request.resource.data.schoolId).ownerUid == request.auth.uid);
+      allow get: if signedIn() && request.auth.uid == uid;
+      allow delete: if signedIn() && request.auth.uid == uid && resource.data.status != 'approved';
     }
 
     // ---------------------------------------------------------- join codes --
@@ -63,14 +98,23 @@ service cloud.firestore {
     // --------------------------------------------------------------- school --
     match /schools/{schoolId} {
       allow read: if member(schoolId);
-      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid && !exists(/databases/$(database)/documents/schools/$(schoolId));
-      allow update: if member(schoolId) && role() == 'admin';
+      // Anyone with a verified email may open ONE demo school (its id comes from their login),
+      // lasting at most a day. Real schools are only created by the owners.
+      allow create: if signedIn() && request.auth.token.email_verified == true
+        && request.resource.data.ownerUid == request.auth.uid
+        && schoolId.matches('demo-[a-z0-9]+')
+        && !exists(/databases/$(database)/documents/schools/$(schoolId))
+        && request.resource.data.demo == true
+        && request.resource.data.demoExpiresAt is int
+        && request.resource.data.demoExpiresAt <= request.time.toMillis() + 86700000;
+      allow update: if member(schoolId) && role() == 'admin' && untouched(['demo', 'demoExpiresAt', 'ownerUid']);
 
       // settings: first write happens in the create batch
       match /settings/{doc} {
         allow read: if member(schoolId);
         allow write: if (member(schoolId) && role() == 'admin')
-          || (signedIn() && getAfter(/databases/$(database)/documents/schools/$(schoolId)).data.ownerUid == request.auth.uid);
+          || (signedIn() && getAfter(/databases/$(database)/documents/schools/$(schoolId)).data.ownerUid == request.auth.uid
+              && !exists(/databases/$(database)/documents/schools/$(schoolId)/settings/main));
       }
 
       // readable by every member of the school

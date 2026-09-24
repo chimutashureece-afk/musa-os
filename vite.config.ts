@@ -18,7 +18,6 @@ export default defineConfig({
         start_url: '/#/',
         scope: '/',
         display: 'standalone',
-        display_override: ['window-controls-overlay', 'standalone'],
         background_color: '#f4f7f5',
         theme_color: '#0b4427',
         categories: ['education', 'productivity'],

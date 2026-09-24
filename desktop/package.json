@@ -1,7 +1,7 @@
 {
   "name": "musa-os-desktop",
   "productName": "Musa OS",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Musa OS school management \u2014 Windows app",
   "main": "main.js",
   "author": "Musa OS",
@@ -27,8 +27,10 @@
       "main.js",
       "preload.js",
       "offline.html",
+      "splash.html",
       "config.json",
-      "build/icon.png"
+      "build/icon.png",
+      "build/badge.png"
     ],
     "win": {
       "icon": "build/icon.ico",

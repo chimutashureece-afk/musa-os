@@ -30,6 +30,8 @@ export interface UserProfile extends BaseDoc {
   disabled?: boolean;
   /** Demo accounts may switch which role they view the school as. */
   demo?: boolean;
+  /** Demo only: when the demo locks (ms since epoch). */
+  demoExpiresAt?: number;
 }
 
 /** Someone asking to join a school; the head accepts or declines. Lives at joinRequests/{uid}. */
@@ -42,6 +44,24 @@ export interface JoinRequest {
   email: string;
   role: Exclude<Role, 'admin'>;
   note?: string;
+  status: 'pending' | 'approved' | 'declined';
+  createdAt: number;
+  decidedAt?: number;
+}
+
+/** A request to Musa OS (the owners) for a real school: brand-new, or turning a demo into a real school. */
+export interface SchoolRequest {
+  id: string; // = uid of the person asking
+  uid: string;
+  kind: 'new' | 'upgrade';
+  name: string;
+  email: string;
+  phone?: string;
+  schoolName: string;
+  schoolType: Section;
+  /** For upgrades: the demo school to keep. */
+  schoolId?: string;
+  message?: string;
   status: 'pending' | 'approved' | 'declined';
   createdAt: number;
   decidedAt?: number;

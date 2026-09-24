@@ -198,3 +198,19 @@ html.dark, html.dark body {
 @media print {
   html, body, html.dark, html.dark body { background: #fff !important; color: #000 !important; }
 }
+
+/* ------------------------------------------------------------------------
+   Windows app (Electron): room for our title bar, native cursors, no browser feel
+------------------------------------------------------------------------- */
+html.desktop body { padding-top: var(--tb, 0px); }
+html.desktop .sticky.top-0 { top: var(--tb, 0px); }
+html.desktop aside.fixed.inset-y-0 { top: var(--tb, 0px); }
+html.desktop .desktop-titlebar { -webkit-app-region: drag; app-region: drag; }
+html.desktop { --font-sans: "Segoe UI Variable Text", "Segoe UI", "Instrument Sans", system-ui, sans-serif; }
+html.desktop button, html.desktop a, html.desktop [role="tab"], html.desktop label, html.desktop select { cursor: default; }
+html.desktop nav, html.desktop header, html.desktop aside, html.desktop button, html.desktop th, html.desktop label, html.desktop .label { user-select: none; -webkit-user-select: none; }
+html.desktop img { -webkit-user-drag: none; }
+html.desktop ::-webkit-scrollbar { width: 10px; height: 10px; }
+html.desktop ::-webkit-scrollbar-thumb { border: 3px solid transparent; background-clip: padding-box; border-radius: 10px; }
+@media print { html.desktop body { padding-top: 0; } }
+html.desktop .min-h-screen { min-height: calc(100vh - var(--tb, 0px)); }

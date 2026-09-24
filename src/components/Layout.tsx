@@ -4,11 +4,12 @@ import {MonitorDown, WifiOff, GraduationCap, LogOut, Menu, Moon, Sun, X, Search,
 import { navFor } from '../nav';
 import { useAuth, useSettings } from '../context/AuthContext';
 import { ROLE_LABELS, Role } from '../types';
-import { Avatar, Badge, useUI } from './ui';
+import { Avatar, Badge, Button, Field, Input, Modal, useUI } from './ui';
+import { timeLeft } from '../lib/owner';
 import { MusaMark } from './Logo';
 import { Tour, restartTour } from './Tour';
 import { usePendingRequests } from '../lib/joinRequests';
-import { useInstall, useOnline } from '../lib/device';
+import { desktop, useInstall, useOnline } from '../lib/device';
 import { cx, currentTerm, fullName } from '../lib/utils';
 import { useCollection, useIndex } from '../lib/store';
 import { isStaffRole } from '../lib/permissions';
@@ -122,8 +123,21 @@ const VIEW_AS: { role: Role; label: string }[] = [
 
 /** Strip across the top of a demo school: whose view you're in, switch it, restart or leave. */
 const DemoBar: React.FC<{ onTour: () => void }> = ({ onTour }) => {
-  const { profile, endDemo, switchRole, configured } = useAuth();
+  const { profile, endDemo, switchRole, configured, application, requestFullAccess } = useAuth();
   const { toast, confirm } = useUI();
+  const settings = useSettings();
+  const [, tick] = useState(0);
+  useEffect(() => { const t = setInterval(() => tick((n) => n + 1), 60_000); return () => clearInterval(t); }, []);
+  const [askOpen, setAskOpen] = useState(false);
+  const [ask, setAsk] = useState({ name: '', schoolName: '', phone: '', message: '' });
+  const [asking, setAsking] = useState(false);
+  const sendAsk = async () => {
+    if (!ask.name.trim() || !ask.schoolName.trim()) { toast('Add your name and your school’s name', 'error'); return; }
+    setAsking(true);
+    try { await requestFullAccess(ask); setAskOpen(false); toast('Sent — the Musa OS team will approve it soon. Your demo keeps working meanwhile.'); }
+    catch (e: any) { toast(e?.message ?? 'Could not send', 'error'); }
+    setAsking(false);
+  };
   const nav = useNavigate();
   const { data: students } = useCollection('students');
   const { data: staff } = useCollection('staff');
@@ -152,7 +166,7 @@ const DemoBar: React.FC<{ onTour: () => void }> = ({ onTour }) => {
   const leave = async (to: string) => {
     const ok = await confirm({
       title: 'Leave the demo?',
-      body: configured ? 'You’ll be signed out of this demo account on this device, and it can’t be reopened afterwards.' : 'The demo school in this browser will be deleted.',
+      body: configured ? 'You’ll be signed out on this device. Your demo stays until its day is up — ask for a new link with the same email (Try the demo) to come back.' : 'The demo school in this browser will be deleted.',
       confirmText: 'Leave demo', danger: true,
     });
     if (!ok) return;
@@ -161,7 +175,9 @@ const DemoBar: React.FC<{ onTour: () => void }> = ({ onTour }) => {
 
   return (
     <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1.5 bg-brand-950 px-4 py-2 text-center text-[13px] text-white/80 dark:bg-ink-950 dark:text-white/70 no-print">
-      <span><b className="font-semibold text-white">Demo school</b> · {configured ? 'your own demo account — changes are saved' : 'saved in this browser'}</span>
+      <span><b className="font-semibold text-white">Demo school</b> · {configured
+        ? <>{profile?.demoExpiresAt ? <b className="font-semibold text-marigold-300">{timeLeft(profile.demoExpiresAt)}</b> : 'one day'} · changes are saved</>
+        : 'saved in this browser'}</span>
       <label className="flex items-center gap-2">
         <span className="text-white/60">View as</span>
         <span className="relative">
@@ -174,9 +190,22 @@ const DemoBar: React.FC<{ onTour: () => void }> = ({ onTour }) => {
       </label>
       <span className="flex items-center gap-3">
         {profile?.role === 'admin' && <button onClick={onTour} className="font-semibold text-white underline-offset-4 hover:underline">Restart tour</button>}
-        <button onClick={() => leave('/signup')} className="font-semibold text-marigold-300 underline-offset-4 hover:underline">Create my real school</button>
+        {configured
+          ? application?.status === 'pending'
+            ? <span className="text-white/70">Full access requested · waiting for approval</span>
+            : <button onClick={() => { setAsk((a) => ({ ...a, schoolName: a.schoolName || (settings?.name?.startsWith('Demo') ? '' : settings?.name ?? '') })); setAskOpen(true); }} className="font-semibold text-marigold-300 underline-offset-4 hover:underline">Keep this as my real school</button>
+          : <button onClick={() => leave('/signup')} className="font-semibold text-marigold-300 underline-offset-4 hover:underline">Create my real school</button>}
         <button onClick={() => leave('/login')} className="text-white/60 underline-offset-4 hover:text-white hover:underline">Leave</button>
       </span>
+      <Modal open={askOpen} onClose={() => setAskOpen(false)} size="sm" title="Keep this as your real school"
+        footer={<><Button variant="outline" onClick={() => setAskOpen(false)}>Cancel</Button><Button onClick={sendAsk} loading={asking}>Send to Musa OS</Button></>}>
+        <div className="space-y-4 text-left">
+          <p className="text-sm text-slate-600 dark:text-slate-300">Everything you’ve added stays. Once the Musa OS team approves, the time limit goes and this becomes your school.</p>
+          <Field label="Your full name"><Input value={ask.name} onChange={(e) => setAsk({ ...ask, name: e.target.value })} placeholder="e.g. Mrs R. Moyo" /></Field>
+          <Field label="Your school’s name"><Input value={ask.schoolName} onChange={(e) => setAsk({ ...ask, schoolName: e.target.value })} placeholder="e.g. Greenfield High School" /></Field>
+          <Field label="Phone or WhatsApp"><Input type="tel" value={ask.phone} onChange={(e) => setAsk({ ...ask, phone: e.target.value })} placeholder="0772 123 456" /></Field>
+        </div>
+      </Modal>
     </div>
   );
 };
@@ -187,6 +216,7 @@ export const Layout: React.FC = () => {
   const [tourKey, setTourKey] = useState(0);
   const requests = usePendingRequests(profile);
   const online = useOnline();
+  useEffect(() => { desktop?.setBadge?.(requests.length); }, [requests.length]);
   const install = useInstall();
   const { toast } = useUI();
   const seen = useRef<Set<string> | null>(null);

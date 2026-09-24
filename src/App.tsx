@@ -3,6 +3,8 @@ import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-d
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { UIProvider, Spinner, EmptyState, useUI } from './components/ui';
 import { Layout } from './components/Layout';
+import { DesktopChrome } from './components/DesktopChrome';
+import { isInstalledApp } from './lib/device';
 import { canVisit } from './nav';
 import { store } from './lib/store';
 import {ShieldAlert} from 'lucide-react';
@@ -28,6 +30,12 @@ const LibraryPage = lazy(() => import('./pages/Library'));
 const Conduct = lazy(() => import('./pages/Conduct'));
 const SettingsPage = lazy(() => import('./pages/Settings'));
 const Setup = lazy(() => import('./pages/Setup'));
+const Access = import('./pages/Access');
+const LinkEmail = lazy(() => Access.then((m) => ({ default: m.LinkEmail })));
+const DemoEnded = lazy(() => Access.then((m) => ({ default: m.DemoEnded })));
+const ApplicationPending = lazy(() => Access.then((m) => ({ default: m.ApplicationPending })));
+const OwnerSignIn = lazy(() => Access.then((m) => ({ default: m.OwnerSignIn })));
+const OwnerConsole = lazy(() => import('./pages/Owner'));
 const Pending = lazy(() => import('./pages/Auth').then((m) => ({ default: m.PendingApproval })));
 
 const Guard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -46,15 +54,21 @@ const ErrorBridge: React.FC = () => {
 };
 
 const Shell: React.FC = () => {
-  const { ready, profile, pending } = useAuth();
+  const { ready, profile, pending, application, locked, owner, linkNeedsEmail } = useAuth();
   if (!ready) return <Spinner label="Starting Musa OS…" />;
-  if (pending && !profile) return <Suspense fallback={<Spinner />}><Pending /></Suspense>;
+  const only = (el: React.ReactNode) => <Suspense fallback={<Spinner />}>{el}</Suspense>;
+  if (linkNeedsEmail) return only(<LinkEmail />);
+  if (owner) return only(<OwnerConsole />);
+  if (locked) return only(<DemoEnded />);
+  if (application && !profile) return only(<ApplicationPending />);
+  if (pending && !profile) return only(<Pending />);
   return (
     <Suspense fallback={<Spinner />}>
       <Routes>
-        <Route path="/login" element={profile ? <Navigate to="/" replace /> : <Login />} />
+        <Route path="/login" element={profile ? <Navigate to="/" replace /> : isInstalledApp() ? <Navigate to="/signin" replace /> : <Login />} />
         <Route path="/signin" element={profile ? <Navigate to="/" replace /> : <SignIn />} />
         <Route path="/signup" element={profile ? <Navigate to="/" replace /> : <SignUp />} />
+        <Route path="/owner" element={profile ? <Navigate to="/" replace /> : <OwnerSignIn />} />
         <Route element={<Guard><Layout /></Guard>}>
           <Route index element={<Dashboard />} />
           <Route path="setup" element={<Setup />} />
@@ -87,6 +101,7 @@ export default function App() {
       <AuthProvider>
         <ErrorBridge />
         <HashRouter>
+          <DesktopChrome />
           <Shell />
         </HashRouter>
       </AuthProvider>

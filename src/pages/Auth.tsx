@@ -15,7 +15,7 @@ import { JoinRequest } from '../types';
 const friendly = friendlyAuthError;
 
 // --------------------------------------------------------------- frame --
-const Frame: React.FC<{ children: React.ReactNode; aside: React.ReactNode }> = ({ children, aside }) => {
+export const Frame: React.FC<{ children: React.ReactNode; aside: React.ReactNode }> = ({ children, aside }) => {
   const { dark, toggle } = useTheme();
   return (
     <div className="grid min-h-screen bg-paper-50 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] dark:bg-ink-900">
@@ -33,7 +33,7 @@ const Frame: React.FC<{ children: React.ReactNode; aside: React.ReactNode }> = (
 };
 
 /** Right-hand panel: a single sheet of ruled paper on the dark green desk. */
-const PaperAside: React.FC<{ title: string; lines: string[] }> = ({ title, lines }) => (
+export const PaperAside: React.FC<{ title: string; lines: string[] }> = ({ title, lines }) => (
   <div className="absolute inset-0 flex items-center justify-center p-12">
     <div aria-hidden="true" className="absolute inset-0 [background-image:radial-gradient(rgba(255,255,255,.05)_1px,transparent_1px)] [background-size:22px_22px]" />
     <div className="paper relative w-full max-w-[440px] rotate-[-1.5deg] rounded-[4px] bg-[#fdfcf7] px-10 pb-10 pt-12 text-[#1f2a26] shadow-[0_40px_80px_-30px_rgba(0,0,0,.7)]">
@@ -53,11 +53,11 @@ const PaperAside: React.FC<{ title: string; lines: string[] }> = ({ title, lines
   </div>
 );
 
-const Notice: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+export const Notice: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <p role="alert" className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200">{children}</p>
 );
 
-const PasswordInput: React.FC<{ value: string; onChange: (v: string) => void; autoComplete: string }> = ({ value, onChange, autoComplete }) => {
+export const PasswordInput: React.FC<{ value: string; onChange: (v: string) => void; autoComplete: string }> = ({ value, onChange, autoComplete }) => {
   const [show, setShow] = useState(false);
   return (
     <div className="relative">
@@ -68,7 +68,7 @@ const PasswordInput: React.FC<{ value: string; onChange: (v: string) => void; au
   );
 };
 
-const NotConfigured: React.FC = () => (
+export const NotConfigured: React.FC = () => (
   <Notice>Sign-in isn’t available yet: this copy of Musa OS has no Firebase project keys. Add them to the <code>.env</code> file and rebuild.</Notice>
 );
 
@@ -125,16 +125,16 @@ function NewSchool({ onBack }: { onBack: () => void }) {
   const nav = useNavigate();
   const [step, setStep] = useState<1 | 2>(1);
   const [type, setType] = useState<Section | null>(null);
-  const [f, setF] = useState({ schoolName: '', name: '', email: '', password: '' });
+  const [f, setF] = useState({ schoolName: '', name: '', email: '', password: '', phone: '', message: '' });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
+  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value });
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!type) { setStep(1); return; }
     setErr(null); setBusy(true);
-    try { await registerSchool({ ...f, schoolName: f.schoolName.trim(), name: f.name.trim(), schoolType: type }); nav('/setup', { replace: true }); }
+    try { await registerSchool({ ...f, schoolName: f.schoolName.trim(), name: f.name.trim(), schoolType: type }); nav('/', { replace: true }); }
     catch (x) { setErr(friendly(x)); setBusy(false); }
   };
 
@@ -142,7 +142,7 @@ function NewSchool({ onBack }: { onBack: () => void }) {
     ? <PaperAside title="Your primary school" lines={['ECD A to Grade 7 classes', 'Primary grading scale', '10 primary subjects to start', 'Registers, fees and reports']} />
     : type === 'secondary'
       ? <PaperAside title="Your secondary school" lines={['Form 1 to Form 6 classes', 'O-Level and A-Level grading', '17 ZIMSEC subjects to start', 'AceGrader for marking scripts']} />
-      : <PaperAside title="New school checklist" lines={['Choose primary or secondary', 'Name your school', 'Create the admin login', 'Invite staff and parents']} />;
+      : <PaperAside title="Getting your school" lines={['Choose primary or secondary', 'Tell us about the school', 'Musa OS approves it', 'Invite staff and parents']} />;
 
   return (
     <Frame aside={aside}>
@@ -185,16 +185,18 @@ function NewSchool({ onBack }: { onBack: () => void }) {
       ) : (
         <>
           <button type="button" onClick={() => { setStep(1); setErr(null); }} className="mb-4 inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"><ArrowLeft size={15} /> {type && SCHOOL_TYPES[type].label}</button>
-          <h1 className="font-display text-[2rem] font-bold leading-tight tracking-[-0.03em] text-slate-900 dark:text-white">Create your school</h1>
-          <p className="mt-1.5 text-[15px] text-slate-500 dark:text-slate-400">You’ll be the administrator. You can add staff, parents and learners once you’re in.</p>
+          <h1 className="font-display text-[2rem] font-bold leading-tight tracking-[-0.03em] text-slate-900 dark:text-white">Apply for your school</h1>
+          <p className="mt-1.5 text-[15px] text-slate-500 dark:text-slate-400">New schools are approved by the Musa OS team, usually within a day. You’ll be the administrator once it’s approved.</p>
           {!configured ? <div className="mt-8"><NotConfigured /></div> : (
             <form onSubmit={submit} className="mt-7 space-y-4">
               <Field label="School name"><Input required autoFocus value={f.schoolName} onChange={set('schoolName')} placeholder={type === 'primary' ? 'e.g. Chipo Junior School' : 'e.g. Greenfield High School'} /></Field>
               <Field label="Your full name"><Input required autoComplete="name" value={f.name} onChange={set('name')} placeholder="e.g. Mrs R. Moyo" /></Field>
               <Field label="Email"><Input type="email" required autoComplete="email" value={f.email} onChange={set('email')} placeholder="head@school.co.zw" /></Field>
-              <Field label="Password" hint="At least 6 characters"><PasswordInput value={f.password} onChange={(v) => setF({ ...f, password: v })} autoComplete="new-password" /></Field>
+              <Field label="Phone or WhatsApp" hint="So we can reach you about the school"><Input type="tel" autoComplete="tel" value={f.phone} onChange={set('phone')} placeholder="0772 123 456" /></Field>
+              <Field label="Password" hint="At least 6 characters — you’ll sign in with this"><PasswordInput value={f.password} onChange={(v) => setF({ ...f, password: v })} autoComplete="new-password" /></Field>
+              <Field label="Anything we should know? (optional)"><Textarea value={f.message} onChange={set('message')} className="min-h-[64px]" placeholder="e.g. 420 learners, we use Excel for fees now" /></Field>
               {err && <Notice>{err}</Notice>}
-              <Button type="submit" size="lg" className="w-full" loading={busy}>Create school</Button>
+              <Button type="submit" size="lg" className="w-full" loading={busy}>Send application</Button>
             </form>
           )}
         </>
@@ -232,7 +234,7 @@ export function SignUp() {
       <h1 className="font-display text-[2rem] font-bold leading-tight tracking-[-0.03em] text-slate-900 dark:text-white">Create an account</h1>
       <p className="mt-1.5 text-[15px] text-slate-500 dark:text-slate-400">Are you setting up your school, or joining one that already uses Musa OS?</p>
       <div className="mt-7 space-y-3">
-        {opt('new', <School size={19} />, 'Set up a new school', 'For the head or administrator. You’ll invite staff and approve who gets in.')}
+        {opt('new', <School size={19} />, 'Apply for a new school', 'For the head or administrator. The Musa OS team approves new schools; then you invite staff.')}
         {opt('join', <Users size={19} />, 'Join my school', 'For teachers, the bursar, parents and learners. You need the school code from the office.')}
       </div>
       <p className="mt-8 text-sm text-slate-500 dark:text-slate-400">

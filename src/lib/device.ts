@@ -40,3 +40,14 @@ export function useInstall() {
 
 /** Link to the Windows installer, if one has been published (set VITE_DESKTOP_DOWNLOAD_URL). */
 export const WINDOWS_DOWNLOAD_URL = (import.meta.env.VITE_DESKTOP_DOWNLOAD_URL as string | undefined) || '';
+
+// --- Windows app bridge (desktop/preload.js) ---------------------------------
+export interface DesktopBridge {
+  platform: string;
+  version: string;
+  setTitleBarColors?: (c: { color: string; symbolColor: string }) => void;
+  setBadge?: (count: number) => void;
+  onRoute?: (cb: (route: string) => void) => void;
+  minimize?: () => void;
+}
+export const desktop: DesktopBridge | undefined = typeof window !== 'undefined' ? (window as any).musaDesktop : undefined;

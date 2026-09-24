@@ -368,7 +368,9 @@ const ProductPreview: React.FC<{ index: number; onPick: (i: number) => void }> =
 
 export default function Login() {
   const nav = useNavigate();
-  const { startDemo } = useAuth();
+  const { startDemo, sendDemoLink, configured } = useAuth();
+  const [demoEmail, setDemoEmail] = useState('');
+  const [linkSent, setLinkSent] = useState(false);
   const install = useInstall();
   const { dark, toggle } = useTheme();
   const [watch, setWatch] = useState(false);
@@ -378,7 +380,16 @@ export default function Login() {
   const [launching, setLaunching] = useState(false);
   const [demoErr, setDemoErr] = useState<string | null>(null);
   const launch = async () => {
-    setDemoErr(null); setLaunching(true);
+    setDemoErr(null);
+    if (configured) {
+      if (!/^\S+@\S+\.\S+$/.test(demoEmail.trim())) { setDemoErr('Enter your email — we’ll send your demo link there.'); return; }
+      setLaunching(true);
+      try { restartTour(); await sendDemoLink(demoEmail, demoType); setLinkSent(true); }
+      catch (e) { setDemoErr(friendlyAuthError(e)); }
+      setLaunching(false);
+      return;
+    }
+    setLaunching(true);
     try { restartTour(); await startDemo(demoType); nav('/', { replace: true }); }
     catch (e) { setDemoErr(friendlyAuthError(e)); setLaunching(false); }
   };
@@ -591,9 +602,23 @@ export default function Login() {
 
       <Walkthrough open={watch} onClose={() => setWatch(false)} onTry={openDemo} />
 
-      <Modal open={picker} onClose={() => setPicker(false)} size="sm" title="Try Musa OS"
-        footer={<><Button variant="outline" onClick={() => setPicker(false)}>Cancel</Button><Button onClick={launch} loading={launching} icon={<ArrowRight size={15} />}>Start the demo</Button></>}>
-        <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-300">We’ll make you a private demo account with an <b className="font-semibold text-slate-900 dark:text-white">empty</b> school, and a guide walks you through setting it up. Everything you add is saved, and you can switch between head, teacher, bursar, parent and learner views.</p>
+      <Modal open={picker} onClose={() => { setPicker(false); setLinkSent(false); }} size="sm" title={linkSent ? 'Check your email' : 'Try Musa OS for a day'}
+        footer={linkSent
+          ? <Button onClick={() => { setPicker(false); setLinkSent(false); }}>Done</Button>
+          : <><Button variant="outline" onClick={() => setPicker(false)}>Cancel</Button><Button onClick={launch} loading={launching} icon={<ArrowRight size={15} />}>{configured ? 'Email me the demo link' : 'Start the demo'}</Button></>}>
+        {linkSent ? (
+          <div className="text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+            <p>We’ve sent a link to <b className="text-slate-900 dark:text-white">{demoEmail.trim()}</b>. Open it on this device and your demo school opens straight away.</p>
+            <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">Not there in a minute? Check spam or promotions. The demo lasts one day from when you open it.</p>
+          </div>
+        ) : <>
+        <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-300">You get an <b className="font-semibold text-slate-900 dark:text-white">empty</b> demo school for <b className="font-semibold text-slate-900 dark:text-white">one day</b>, with a guide to set it up and switch between head, teacher, bursar, parent and learner views. {configured && 'We’ll email you a link to get in — one demo per email.'}</p>
+        {configured && (
+          <label className="mt-4 block">
+            <span className="label">Your email</span>
+            <input type="email" autoComplete="email" value={demoEmail} onChange={(e) => setDemoEmail(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && launch()} className="input" placeholder="you@school.co.zw" />
+          </label>
+        )}
         <div role="radiogroup" aria-label="School type" className="mt-4 space-y-2">
           {(Object.keys(SCHOOL_TYPES) as Section[]).map((k) => (
             <button key={k} type="button" role="radio" aria-checked={demoType === k} onClick={() => setDemoType(k)}
@@ -605,6 +630,7 @@ export default function Login() {
           ))}
         </div>
         {demoErr && <p role="alert" className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200">{demoErr}</p>}
+        </>}
       </Modal>
     </div>
   );
