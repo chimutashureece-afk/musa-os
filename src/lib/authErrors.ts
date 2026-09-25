@@ -14,7 +14,8 @@ export function friendlyAuthError(e: any): string {
     case 'auth/too-many-requests': return 'Too many attempts. Wait a few minutes and try again.';
     case 'auth/network-request-failed': return 'No connection. Check your internet and try again.';
     case 'auth/operation-not-allowed':
-    case 'auth/admin-restricted-operation': return 'That sign-in method is switched off. In the Firebase console, open Authentication → Sign-in method and turn on Email/Password, Anonymous (for the demo) and Google (for owners).';
+    case 'auth/admin-restricted-operation': return 'That sign-in method is switched off. In the Firebase console, open Authentication → Sign-in method and turn on Email/Password (schools and the demo) and Google (for owners).';
+    case 'musa/timeout': return 'Musa OS can’t reach its database right now. Check your internet and try again. (Setting up: make sure Cloud Firestore is created in the Firebase console and the rules are published.)';
     case 'auth/popup-closed-by-user':
     case 'auth/cancelled-popup-request': return 'The Google window was closed before signing in. Try again.';
     case 'auth/popup-blocked': return 'Your browser blocked the Google sign-in window. Allow pop-ups for this site and try again.';

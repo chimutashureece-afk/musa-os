@@ -166,7 +166,7 @@ const DemoBar: React.FC<{ onTour: () => void }> = ({ onTour }) => {
   const leave = async (to: string) => {
     const ok = await confirm({
       title: 'Leave the demo?',
-      body: configured ? 'You’ll be signed out and won’t be able to reopen this demo — it lives only in this browser. To keep it, choose “Keep this as my real school” first.' : 'The demo school in this browser will be deleted.',
+      body: configured ? 'You’ll be signed out on this device. Your demo is saved until its day is up — type the same email in Try the demo to come back, on any device.' : 'The demo school in this browser will be deleted.',
       confirmText: 'Leave demo', danger: true,
     });
     if (!ok) return;

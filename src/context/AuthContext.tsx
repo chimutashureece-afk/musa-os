@@ -1,9 +1,9 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail, updateProfile,
-  signInAnonymously, signInWithPopup, signInWithRedirect, GoogleAuthProvider, linkWithCredential, EmailAuthProvider, User,
+  signInWithPopup, signInWithRedirect, GoogleAuthProvider, updatePassword, reauthenticateWithCredential, EmailAuthProvider, User,
 } from 'firebase/auth';
-import { deleteDoc, deleteField, doc, getDoc, onSnapshot, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import { deleteDoc, deleteField, doc, getDoc, getDocFromServer, onSnapshot, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { JoinRequest, Role, SchoolRequest, Section, UserProfile, SchoolSettings, Staff } from '../types';
 import { getFirebase, isFirebaseConfigured } from '../lib/firebase';
 import { FirestoreBackend, LocalBackend } from '../lib/backend';
@@ -19,6 +19,13 @@ type Mode = 'firebase' | 'demo';
 const LOCAL_DEMO_KEY = 'musa-demo';
 /** A plain email check — the demo takes the email as typed (nothing is sent to it). */
 const EMAIL_RE = /^[^\s@/]+@[^\s@/]+\.[^\s@/]+$/;
+/** A demo login is opened by its email alone, so its password is worked out from the email.
+ *  (Keeping the demo as a real school swaps this for a password the head chooses.) */
+const demoPassword = (email: string) => `musa-demo-v1::${email}`;
+/** Firestore keeps retrying writes it can't send, so a dead connection would spin forever — give up after a while. */
+function withTimeout<T>(p: Promise<T>, ms = 20_000): Promise<T> {
+  return Promise.race([p, new Promise<T>((_, rej) => setTimeout(() => rej(Object.assign(new Error('timeout'), { code: 'musa/timeout' })), ms))]);
+}
 
 export interface RegisterArgs { name: string; email: string; password: string; schoolName: string; schoolType: Section; phone?: string; message?: string }
 export interface JoinArgs { code: string; name: string; email: string; password: string; role: JoinRequest['role']; note?: string }
@@ -202,7 +209,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return true;
   };
 
-  /** A one-day demo school for this (anonymous) login, registered against the email typed in. */
+  /** A one-day demo school for this demo login. */
   const createDemo = async (user: User, type: Section, email: string) => {
     const { db } = getFirebase();
     const uid = user.uid;
@@ -211,14 +218,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const joinCode = makeJoinCode();
     const name = demoName(type);
     const b = writeBatch(db);
-    // one demo per email: the registry entry can only be created once
-    b.set(doc(db, 'demoEmails', email), { email, uid, schoolId, createdAt: Date.now(), demoExpiresAt: expires });
     b.set(doc(db, 'schools', schoolId), { name, schoolType: type, ownerUid: uid, createdAt: Date.now(), demo: true, demoExpiresAt: expires, demoEmail: email });
     b.set(doc(db, 'schools', schoolId, 'settings', 'main'), { ...newSchoolSettings(name, type), joinCode });
     b.set(doc(db, 'schoolCodes', joinCode), { schoolId, name, createdAt: Date.now() });
     const p: UserProfile = { id: uid, name: email.split('@')[0] || 'Demo user', email, role: 'admin', schoolId, demo: true, demoExpiresAt: expires, createdAt: Date.now() };
     b.set(doc(db, 'users', uid), p);
-    await b.commit();
+    await withTimeout(b.commit());
     try {
       const subj = writeBatch(db);
       for (const s of starterSubjects(type)) subj.set(doc(db, 'schools', schoolId, 'subjects', s.id), s);
@@ -359,15 +364,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const src = locked ?? (profile?.demo ? { uid: profile.id, email: profile.email, schoolId: profile.schoolId, schoolName: settings?.name ?? '', schoolType: (settings?.schoolType ?? 'secondary') as Section } : null);
       if (!src) return;
       const { auth, db } = getFirebase();
-      // turn the anonymous demo login into a normal email + password one (nothing is emailed)
+      // swap the demo's email-only login for a password the head chooses (nothing is emailed)
       const me = auth.currentUser;
-      if (me?.isAnonymous) {
+      if (me && me.email) {
         if ((password ?? '').length < 6) throw new Error('Choose a password of at least 6 characters.');
-        try { await linkWithCredential(me, EmailAuthProvider.credential(src.email, password)); }
+        try { await updatePassword(me, password); }
         catch (e: any) {
-          if (e?.code === 'auth/email-already-in-use' || e?.code === 'auth/credential-already-in-use')
-            throw new Error('That email already has a Musa OS account. Sign in with it, or use a different email for the demo.');
-          throw e;
+          if (e?.code !== 'auth/requires-recent-login') throw e;
+          await reauthenticateWithCredential(me, EmailAuthProvider.credential(me.email, demoPassword(me.email)));
+          await updatePassword(me, password);
         }
       }
       const req: SchoolRequest = {
@@ -409,26 +414,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { auth, db } = getFirebase();
       busy.current = true;
       try {
-        // this browser may already hold the demo for this email
-        const current = auth.currentUser;
-        if (current?.isAnonymous) {
-          const mine = await getDoc(doc(db, 'users', current.uid)).catch(() => null);
-          if (mine?.exists() && (mine.data() as UserProfile).email === mail) { await resolveAccount(current); setReady(true); return; }
-          await signOut(auth).catch(() => {});
+        if (auth.currentUser && auth.currentUser.email !== mail) await signOut(auth).catch(() => {});
+        // same email as before → the same demo, on any device; a new email → a new demo
+        let user: User | null = auth.currentUser;
+        if (!user) {
+          try { user = (await withTimeout(signInWithEmailAndPassword(auth, mail, demoPassword(mail)))).user; }
+          catch (e: any) {
+            if (!['auth/invalid-credential', 'auth/user-not-found', 'auth/wrong-password', 'auth/invalid-login-credentials'].includes(e?.code)) throw e;
+            try { user = (await withTimeout(createUserWithEmailAndPassword(auth, mail, demoPassword(mail)))).user; }
+            catch (e2: any) {
+              if (e2?.code === 'auth/email-already-in-use') throw new Error('This email already has a Musa OS account with its own password. Use Sign in instead.');
+              throw e2;
+            }
+          }
         }
-        const user = (await signInAnonymously(auth)).user;
-        const used = await getDoc(doc(db, 'demoEmails', mail)).catch(() => null);
-        if (used?.exists()) {
-          const d = used.data() as { uid: string; demoExpiresAt?: number };
-          await user.delete().catch(() => signOut(auth));
-          throw new Error(Date.now() < Number(d.demoExpiresAt ?? 0)
-            ? 'This email already has a demo running. Open it in the browser you started it in.'
-            : 'The one-day demo for this email has ended. To keep using Musa OS, sign up your school.');
+        const has = await withTimeout(getDocFromServer(doc(db, 'users', user.uid)));
+        if (!has.exists()) {
+          const app = await getDocFromServer(doc(db, 'schoolRequests', user.uid)).catch(() => null);
+          if (!app?.exists()) {
+            try { localStorage.removeItem('musa-tour'); } catch { /* ignore */ }
+            await createDemo(user, type, mail);
+          }
         }
-        try { localStorage.removeItem('musa-tour'); } catch { /* ignore */ }
-        await createDemo(user, type, mail);
-        await resolveAccount(user);
+        await withTimeout(resolveAccount(user));
         setReady(true);
+      } catch (e) {
+        await signOut(auth).catch(() => {});
+        clearAll();
+        throw e;
       } finally {
         busy.current = false;
       }
