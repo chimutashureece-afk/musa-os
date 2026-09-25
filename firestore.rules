@@ -5,7 +5,7 @@ service cloud.firestore {
 
     function signedIn() { return request.auth != null; }
     // The people who run Musa OS (keep in step with src/lib/owner.ts). Email must be verified —
-    // they sign in with an emailed link, which verifies it.
+    // they sign in with Google, which verifies it.
     function isOwner() {
       return signedIn() && request.auth.token.email_verified == true
         && request.auth.token.email in ['chimutashureece@gmail.com', 'chimutashutanatswa13@gmail.com'];
@@ -67,6 +67,16 @@ service cloud.firestore {
       allow delete: if signedIn() && request.auth.uid == uid && resource.data.status != 'approved';
     }
 
+    // --------------------------------------------------------- demo emails --
+    // demoEmails/{email}: one demo per email. Written once, with the demo school; never changed.
+    match /demoEmails/{email} {
+      allow get: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.email == email
+        && request.resource.data.uid == request.auth.uid
+        && !exists(/databases/$(database)/documents/demoEmails/$(email));
+    }
+
     // ---------------------------------------------------------- join codes --
     // Six-letter codes people type to ask to join a school. Anyone may look one up.
     match /schoolCodes/{code} {
@@ -98,10 +108,12 @@ service cloud.firestore {
     // --------------------------------------------------------------- school --
     match /schools/{schoolId} {
       allow read: if member(schoolId);
-      // Anyone with a verified email may open ONE demo school (its id comes from their login),
-      // lasting at most a day. Real schools are only created by the owners.
-      allow create: if signedIn() && request.auth.token.email_verified == true
+      // Anyone may open ONE demo school per email (its id comes from their login, the email is
+      // claimed in demoEmails in the same batch), lasting at most a day. Real schools are only
+      // created by the owners.
+      allow create: if signedIn() && request.auth.token.firebase.sign_in_provider == 'anonymous'
         && request.resource.data.ownerUid == request.auth.uid
+        && getAfter(/databases/$(database)/documents/demoEmails/$(request.resource.data.demoEmail)).data.uid == request.auth.uid
         && schoolId.matches('demo-[a-z0-9]+')
         && !exists(/databases/$(database)/documents/schools/$(schoolId))
         && request.resource.data.demo == true

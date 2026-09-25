@@ -129,7 +129,7 @@ const DemoBar: React.FC<{ onTour: () => void }> = ({ onTour }) => {
   const [, tick] = useState(0);
   useEffect(() => { const t = setInterval(() => tick((n) => n + 1), 60_000); return () => clearInterval(t); }, []);
   const [askOpen, setAskOpen] = useState(false);
-  const [ask, setAsk] = useState({ name: '', schoolName: '', phone: '', message: '' });
+  const [ask, setAsk] = useState({ name: '', schoolName: '', password: '', phone: '', message: '' });
   const [asking, setAsking] = useState(false);
   const sendAsk = async () => {
     if (!ask.name.trim() || !ask.schoolName.trim()) { toast('Add your name and your school’s name', 'error'); return; }
@@ -166,7 +166,7 @@ const DemoBar: React.FC<{ onTour: () => void }> = ({ onTour }) => {
   const leave = async (to: string) => {
     const ok = await confirm({
       title: 'Leave the demo?',
-      body: configured ? 'You’ll be signed out on this device. Your demo stays until its day is up — ask for a new link with the same email (Try the demo) to come back.' : 'The demo school in this browser will be deleted.',
+      body: configured ? 'You’ll be signed out and won’t be able to reopen this demo — it lives only in this browser. To keep it, choose “Keep this as my real school” first.' : 'The demo school in this browser will be deleted.',
       confirmText: 'Leave demo', danger: true,
     });
     if (!ok) return;
@@ -203,6 +203,7 @@ const DemoBar: React.FC<{ onTour: () => void }> = ({ onTour }) => {
           <p className="text-sm text-slate-600 dark:text-slate-300">Everything you’ve added stays. Once the Musa OS team approves, the time limit goes and this becomes your school.</p>
           <Field label="Your full name"><Input value={ask.name} onChange={(e) => setAsk({ ...ask, name: e.target.value })} placeholder="e.g. Mrs R. Moyo" /></Field>
           <Field label="Your school’s name"><Input value={ask.schoolName} onChange={(e) => setAsk({ ...ask, schoolName: e.target.value })} placeholder="e.g. Greenfield High School" /></Field>
+          {configured && <Field label="Choose a password" hint={`You’ll sign in with ${profile?.email ?? 'your email'} and this password.`}><Input type="password" autoComplete="new-password" minLength={6} value={ask.password} onChange={(e) => setAsk({ ...ask, password: e.target.value })} /></Field>}
           <Field label="Phone or WhatsApp"><Input type="tel" value={ask.phone} onChange={(e) => setAsk({ ...ask, phone: e.target.value })} placeholder="0772 123 456" /></Field>
         </div>
       </Modal>

@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 
 const APP_URL = process.env.MUSA_URL || (() => {
-  try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8')).appUrl; } catch { return 'https://musa-os-gray.vercel.app/'; }
+  try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8')).appUrl; } catch { return 'https://musaos.online/'; }
 })();
 const ORIGIN = new URL(APP_URL).origin;
 const STATE_FILE = path.join(app.getPath('userData'), 'window.json');
@@ -67,6 +67,8 @@ function createWindow() {
   // Links to other sites open in the normal browser; Musa OS pages stay in the app.
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith(ORIGIN)) return { action: 'allow' };
+    // Google sign-in for the owners' console opens Firebase's auth window
+    if (/\/__\/auth\/handler|^https:\/\/accounts\.google\.com\//.test(url)) return { action: 'allow' };
     shell.openExternal(url);
     return { action: 'deny' };
   });

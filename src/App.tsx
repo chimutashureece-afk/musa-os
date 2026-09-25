@@ -31,7 +31,6 @@ const Conduct = lazy(() => import('./pages/Conduct'));
 const SettingsPage = lazy(() => import('./pages/Settings'));
 const Setup = lazy(() => import('./pages/Setup'));
 const Access = import('./pages/Access');
-const LinkEmail = lazy(() => Access.then((m) => ({ default: m.LinkEmail })));
 const DemoEnded = lazy(() => Access.then((m) => ({ default: m.DemoEnded })));
 const ApplicationPending = lazy(() => Access.then((m) => ({ default: m.ApplicationPending })));
 const OwnerSignIn = lazy(() => Access.then((m) => ({ default: m.OwnerSignIn })));
@@ -54,10 +53,9 @@ const ErrorBridge: React.FC = () => {
 };
 
 const Shell: React.FC = () => {
-  const { ready, profile, pending, application, locked, owner, linkNeedsEmail } = useAuth();
+  const { ready, profile, pending, application, locked, owner } = useAuth();
   if (!ready) return <Spinner label="Starting Musa OS…" />;
   const only = (el: React.ReactNode) => <Suspense fallback={<Spinner />}>{el}</Suspense>;
-  if (linkNeedsEmail) return only(<LinkEmail />);
   if (owner) return only(<OwnerConsole />);
   if (locked) return only(<DemoEnded />);
   if (application && !profile) return only(<ApplicationPending />);

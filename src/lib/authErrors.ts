@@ -13,13 +13,12 @@ export function friendlyAuthError(e: any): string {
     case 'auth/weak-password': return 'Use a password of at least 6 characters.';
     case 'auth/too-many-requests': return 'Too many attempts. Wait a few minutes and try again.';
     case 'auth/network-request-failed': return 'No connection. Check your internet and try again.';
-    case 'auth/operation-not-allowed': return 'That sign-in method is switched off. In the Firebase console, open Authentication → Sign-in method → Email/Password and turn on both Email/Password and “Email link (passwordless sign-in)”.';
-    case 'auth/invalid-action-code':
-    case 'auth/expired-action-code': return 'That sign-in link has already been used or has expired. Ask for a new one — it only works once.';
-    case 'auth/unauthorized-continue-uri':
-    case 'auth/invalid-continue-uri': return `Email links aren’t allowed from this web address yet. In the Firebase console, add ${location.hostname} under Authentication → Settings → Authorized domains.`;
-    case 'auth/quota-exceeded': return 'Too many sign-in emails today. Try again tomorrow.';
-    case 'auth/admin-restricted-operation': return 'Demo accounts are switched off. In the Firebase console, open Authentication → Sign-in method and enable Anonymous.';
+    case 'auth/operation-not-allowed':
+    case 'auth/admin-restricted-operation': return 'That sign-in method is switched off. In the Firebase console, open Authentication → Sign-in method and turn on Email/Password, Anonymous (for the demo) and Google (for owners).';
+    case 'auth/popup-closed-by-user':
+    case 'auth/cancelled-popup-request': return 'The Google window was closed before signing in. Try again.';
+    case 'auth/popup-blocked': return 'Your browser blocked the Google sign-in window. Allow pop-ups for this site and try again.';
+    case 'auth/credential-already-in-use': return 'That email already has a Musa OS account. Sign in with it instead.';
     case 'auth/configuration-not-found': return 'Firebase Authentication isn’t set up yet. In the Firebase console, open Authentication and click Get started, then enable Email/Password.';
     case 'auth/unauthorized-domain': return `This web address isn’t allowed to sign in yet. In the Firebase console, open Authentication → Settings → Authorized domains and add ${location.hostname}.`;
     case 'auth/invalid-api-key':

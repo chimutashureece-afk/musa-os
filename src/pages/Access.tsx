@@ -1,14 +1,13 @@
-// Screens around access: finishing an emailed link, a demo whose day is over,
+// Screens around access: a demo whose day is over,
 // waiting for Musa OS to approve a school, and the owners' sign-in.
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, Clock, Lock, MailCheck, XCircle } from 'lucide-react';
+import { Check, Clock, Lock, XCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Button, Field, Input, Textarea } from '../components/ui';
 import { Frame, Notice, PaperAside } from './Auth';
 import { SCHOOL_TYPES } from '../lib/defaults';
 import { friendlyAuthError } from '../lib/authErrors';
-import { isOwnerEmail } from '../lib/owner';
 import { Section } from '../types';
 import { cx } from '../lib/utils';
 
@@ -37,38 +36,11 @@ export const TypePicker: React.FC<{ value: Section; onChange: (v: Section) => vo
   </div>
 );
 
-// --------------------------------------------------- link opened elsewhere --
-export function LinkEmail() {
-  const { finishEmailLink } = useAuth();
-  const [email, setEmail] = useState('');
-  const [type, setType] = useState<Section>('secondary');
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const owner = isOwnerEmail(email);
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault(); setErr(null); setBusy(true);
-    try { await finishEmailLink(email, owner ? undefined : type); } catch (x) { setErr(friendlyAuthError(x)); setBusy(false); }
-  };
-  return (
-    <Frame aside={<PaperAside title="Nearly in" lines={['Confirm your email', 'Your demo opens', 'Good for one day']} />}>
-      <Badge><MailCheck size={22} /></Badge>
-      <H1>Confirm your email</H1>
-      <Lead>You opened the sign-in link on a different device or browser. Type the email it was sent to.</Lead>
-      <form onSubmit={submit} className="mt-7 space-y-4">
-        <Field label="Email"><Input type="email" required autoFocus value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
-        {!owner && <Field label="If this is a new demo, which kind of school?"><TypePicker value={type} onChange={setType} /></Field>}
-        {err && <Notice>{err}</Notice>}
-        <Button type="submit" size="lg" className="w-full" loading={busy}>Continue</Button>
-      </form>
-    </Frame>
-  );
-}
-
 // ---------------------------------------------------- demo day is over ------
 export function DemoEnded() {
   const { locked, application, requestFullAccess, cancelApplication, logout } = useAuth();
   const nav = useNavigate();
-  const [f, setF] = useState({ name: '', schoolName: '', phone: '', message: '' });
+  const [f, setF] = useState({ name: '', schoolName: '', password: '', phone: '', message: '' });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   if (!locked) return null;
@@ -89,6 +61,7 @@ export function DemoEnded() {
       <form onSubmit={submit} className="mt-7 space-y-4">
         <Field label="Your full name"><Input required value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="e.g. Mrs R. Moyo" /></Field>
         <Field label="Your school’s name"><Input required value={f.schoolName} onChange={(e) => setF({ ...f, schoolName: e.target.value })} placeholder="e.g. Greenfield High School" /></Field>
+        <Field label="Choose a password" hint={`You’ll sign in with ${locked.email} and this password.`}><Input type="password" required minLength={6} autoComplete="new-password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} /></Field>
         <Field label="Phone or WhatsApp"><Input type="tel" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} placeholder="0772 123 456" /></Field>
         <Field label="Anything we should know? (optional)"><Textarea value={f.message} onChange={(e) => setF({ ...f, message: e.target.value })} className="min-h-[64px]" /></Field>
         {err && <Notice>{err}</Notice>}
@@ -135,33 +108,24 @@ export function ApplicationPending() {
 
 // -------------------------------------------------------- owners' sign-in ---
 export function OwnerSignIn() {
-  const { sendOwnerLink, configured } = useAuth();
-  const [email, setEmail] = useState('');
-  const [sent, setSent] = useState(false);
+  const { ownerSignIn, configured } = useAuth();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault(); setErr(null); setBusy(true);
-    try { await sendOwnerLink(email); setSent(true); } catch (x) { setErr(friendlyAuthError(x)); }
+  const go = async () => {
+    setErr(null); setBusy(true);
+    try { await ownerSignIn(); } catch (x) { setErr(friendlyAuthError(x)); }
     setBusy(false);
   };
   return (
     <Frame aside={<PaperAside title="Musa OS console" lines={['Approve new schools', 'See every demo', 'Extend or end a demo']} />}>
       <Badge><Lock size={21} /></Badge>
       <H1>Owner sign-in</H1>
-      {sent ? (
-        <Lead>We’ve emailed a sign-in link to <b className="text-slate-800 dark:text-slate-200">{email}</b>. Open it on this device to get into the console. Check spam if it isn’t there in a minute.</Lead>
-      ) : (
-        <>
-          <Lead>For the Musa OS team only. We’ll email you a one-time sign-in link.</Lead>
-          {!configured ? <div className="mt-6"><Notice>Firebase isn’t set up in this build.</Notice></div> : (
-            <form onSubmit={submit} className="mt-7 space-y-4">
-              <Field label="Owner email"><Input type="email" required autoFocus value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
-              {err && <Notice>{err}</Notice>}
-              <Button type="submit" size="lg" className="w-full" loading={busy}>Email me a sign-in link</Button>
-            </form>
-          )}
-        </>
+      <Lead>For the Musa OS team only. Sign in with the Google account of an owner email.</Lead>
+      {!configured ? <div className="mt-6"><Notice>Firebase isn’t set up in this build.</Notice></div> : (
+        <div className="mt-7 space-y-4">
+          {err && <Notice>{err}</Notice>}
+          <Button size="lg" className="w-full" loading={busy} onClick={go}>Continue with Google</Button>
+        </div>
       )}
     </Frame>
   );

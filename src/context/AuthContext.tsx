@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail, updateProfile,
-  isSignInWithEmailLink, sendSignInLinkToEmail, signInWithEmailLink, User,
+  signInAnonymously, signInWithPopup, signInWithRedirect, GoogleAuthProvider, linkWithCredential, EmailAuthProvider, User,
 } from 'firebase/auth';
 import { deleteDoc, deleteField, doc, getDoc, onSnapshot, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { JoinRequest, Role, SchoolRequest, Section, UserProfile, SchoolSettings, Staff } from '../types';
@@ -17,14 +17,13 @@ type Mode = 'firebase' | 'demo';
 
 /** Only used when the build has no Firebase keys: the demo then lives in this browser. */
 const LOCAL_DEMO_KEY = 'musa-demo';
-/** Remembers which email a sign-in link was sent to (and why), so the link can finish on this device. */
-const LINK_KEY = 'musa-email-link';
+/** A plain email check — the demo takes the email as typed (nothing is sent to it). */
+const EMAIL_RE = /^[^\s@/]+@[^\s@/]+\.[^\s@/]+$/;
 
 export interface RegisterArgs { name: string; email: string; password: string; schoolName: string; schoolType: Section; phone?: string; message?: string }
 export interface JoinArgs { code: string; name: string; email: string; password: string; role: JoinRequest['role']; note?: string }
 export interface ViewAs { role: Role; staffId?: string; studentIds?: string[]; classIds?: string[] }
 export interface Locked { uid: string; email: string; schoolId: string; schoolName: string; schoolType: Section; endedAt: number }
-type LinkPurpose = { email: string; purpose: 'demo' | 'owner'; type?: Section };
 
 interface AuthCtx {
   ready: boolean;
@@ -41,23 +40,21 @@ interface AuthCtx {
   locked: Locked | null;
   /** Signed in as one of the Musa OS owners. */
   owner: User | null;
-  /** A sign-in link was opened on a device that doesn't know which email it was sent to. */
-  linkNeedsEmail: boolean;
   requestToJoin: (a: JoinArgs) => Promise<void>;
   cancelRequest: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   /** Ask the owners for a new school (creates the login now; the school once approved). */
   registerSchool: (args: RegisterArgs) => Promise<void>;
-  /** From a locked demo: ask to keep this school as a real one. */
-  requestFullAccess: (a: { name: string; schoolName: string; phone?: string; message?: string }) => Promise<void>;
+  /** From a demo (running or locked): ask to keep this school as a real one. The password becomes the
+   *  head's sign-in, so the school can be opened from any device once approved. */
+  requestFullAccess: (a: { name: string; schoolName: string; password: string; phone?: string; message?: string }) => Promise<void>;
   cancelApplication: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   logout: () => Promise<void>;
-  /** Email a one-day demo link. */
-  sendDemoLink: (email: string, type: Section) => Promise<void>;
-  /** Email the owners a sign-in link for the owner console. */
-  sendOwnerLink: (email: string) => Promise<void>;
-  finishEmailLink: (email: string, type?: Section) => Promise<void>;
+  /** Open (or reopen) the one-day demo for this email. No email is sent. */
+  startEmailDemo: (email: string, type: Section) => Promise<void>;
+  /** Owners: sign in with Google (their Google email is already verified). */
+  ownerSignIn: () => Promise<void>;
   /** Browser-only practice school (used only when the build has no Firebase keys). */
   startDemo: (type: Section) => Promise<void>;
   /** Demo only: look at the school as another role. */
@@ -70,8 +67,6 @@ const Ctx = createContext<AuthCtx>(null as any);
 export const useAuth = () => useContext(Ctx);
 
 const demoName = (type: Section) => (type === 'primary' ? 'Demo Primary School' : 'Demo High School');
-const linkUrl = () => `${location.origin}${location.pathname}`;
-
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [ready, setReady] = useState(false);
   const [mode, setMode] = useState<Mode | null>(null);
@@ -81,7 +76,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [application, setApplication] = useState<SchoolRequest | null>(null);
   const [locked, setLocked] = useState<Locked | null>(null);
   const [owner, setOwner] = useState<User | null>(null);
-  const [linkNeedsEmail, setLinkNeedsEmail] = useState(false);
   const watchers = useRef<(() => void)[]>([]);
   const stopWatching = () => { watchers.current.forEach((u) => u()); watchers.current = []; };
   // while signing in / registering we load the profile ourselves, so the auth listener stays quiet
@@ -208,16 +202,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return true;
   };
 
-  /** A one-day demo school for this email-verified account. */
-  const createDemo = async (user: User, type: Section) => {
+  /** A one-day demo school for this (anonymous) login, registered against the email typed in. */
+  const createDemo = async (user: User, type: Section, email: string) => {
     const { db } = getFirebase();
     const uid = user.uid;
     const schoolId = `demo-${uid.slice(0, 10).toLowerCase()}`;
     const expires = Date.now() + DEMO_MS - 60_000; // a minute of slack for clock differences (rules allow 24 h + 5 min)
     const joinCode = makeJoinCode();
     const name = demoName(type);
-    const email = user.email ?? '';
     const b = writeBatch(db);
+    // one demo per email: the registry entry can only be created once
+    b.set(doc(db, 'demoEmails', email), { email, uid, schoolId, createdAt: Date.now(), demoExpiresAt: expires });
     b.set(doc(db, 'schools', schoolId), { name, schoolType: type, ownerUid: uid, createdAt: Date.now(), demo: true, demoExpiresAt: expires, demoEmail: email });
     b.set(doc(db, 'schools', schoolId, 'settings', 'main'), { ...newSchoolSettings(name, type), joinCode });
     b.set(doc(db, 'schoolCodes', joinCode), { schoolId, name, createdAt: Date.now() });
@@ -231,34 +226,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (e) { console.warn('Starter subjects not added', e); }
   };
 
-  /** Finish signing in from an emailed link (demo or owner). */
-  const completeLink = async (email: string, type?: Section) => {
-    const { auth, db } = getFirebase();
-    let stored: LinkPurpose | null = null;
-    try { stored = JSON.parse(localStorage.getItem(LINK_KEY) || 'null'); } catch { /* ignore */ }
-    busy.current = true;
-    try {
-      const cred = await signInWithEmailLink(auth, email.trim(), location.href);
-      try { localStorage.removeItem(LINK_KEY); } catch { /* ignore */ }
-      history.replaceState(null, '', `${location.pathname}#/`);
-      setLinkNeedsEmail(false);
-      const user = cred.user;
-      if (isOwnerEmail(user.email)) { clearAll(); setOwner(user); setReady(true); return; }
-      const has = await getDoc(doc(db, 'users', user.uid));
-      if (!has.exists()) {
-        const app = await getDoc(doc(db, 'schoolRequests', user.uid)).catch(() => null);
-        if (!app?.exists()) {
-          try { localStorage.removeItem('musa-tour'); } catch { /* ignore */ }
-          await createDemo(user, type ?? stored?.type ?? 'secondary');
-        }
-      }
-      await resolveAccount(user);
-      setReady(true);
-    } finally {
-      busy.current = false;
-    }
-  };
-
   useEffect(() => {
     // clear anything older versions left behind in this browser
     try { Object.keys(localStorage).filter((k) => k.startsWith('aceschool:v1:') || k === 'ace-demo-role').forEach((k) => localStorage.removeItem(k)); } catch { /* ignore */ }
@@ -270,14 +237,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
     const { auth } = getFirebase();
-
-    // opened from an emailed sign-in link?
-    if (isSignInWithEmailLink(auth, location.href)) {
-      let stored: LinkPurpose | null = null;
-      try { stored = JSON.parse(localStorage.getItem(LINK_KEY) || 'null'); } catch { /* ignore */ }
-      if (stored?.email) completeLink(stored.email).catch((e) => { setError(friendlyAuthError(e)); setReady(true); });
-      else { setLinkNeedsEmail(true); setReady(true); }
-    }
 
     return onAuthStateChanged(auth, async (fbUser) => {
       if (busy.current) return;
@@ -301,7 +260,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const value = useMemo<AuthCtx>(() => ({
-    ready, mode, profile, error, pending, application, locked, owner, linkNeedsEmail, configured: isFirebaseConfigured,
+    ready, mode, profile, error, pending, application, locked, owner, configured: isFirebaseConfigured,
 
     requestToJoin: async ({ code, name, email, password, role, note }) => {
       setError(null);
@@ -394,12 +353,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     },
 
-    requestFullAccess: async ({ name, schoolName, phone, message }) => {
+    requestFullAccess: async ({ name, schoolName, password, phone, message }) => {
       // from the "demo ended" page, or from a demo that's still running
       const settings = store.peek('settings')[0];
       const src = locked ?? (profile?.demo ? { uid: profile.id, email: profile.email, schoolId: profile.schoolId, schoolName: settings?.name ?? '', schoolType: (settings?.schoolType ?? 'secondary') as Section } : null);
       if (!src) return;
-      const { db } = getFirebase();
+      const { auth, db } = getFirebase();
+      // turn the anonymous demo login into a normal email + password one (nothing is emailed)
+      const me = auth.currentUser;
+      if (me?.isAnonymous) {
+        if ((password ?? '').length < 6) throw new Error('Choose a password of at least 6 characters.');
+        try { await linkWithCredential(me, EmailAuthProvider.credential(src.email, password)); }
+        catch (e: any) {
+          if (e?.code === 'auth/email-already-in-use' || e?.code === 'auth/credential-already-in-use')
+            throw new Error('That email already has a Musa OS account. Sign in with it, or use a different email for the demo.');
+          throw e;
+        }
+      }
       const req: SchoolRequest = {
         id: src.uid, uid: src.uid, kind: 'upgrade', name: name.trim(), email: src.email, schoolName: schoolName.trim() || src.schoolName,
         schoolType: src.schoolType, schoolId: src.schoolId,
@@ -431,22 +401,61 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else if (isFirebaseConfigured) await signOut(getFirebase().auth);
     },
 
-    sendDemoLink: async (email, type) => {
-      const { auth } = getFirebase();
-      const mail = email.trim();
-      await sendSignInLinkToEmail(auth, mail, { url: linkUrl(), handleCodeInApp: true });
-      try { localStorage.setItem(LINK_KEY, JSON.stringify({ email: mail, purpose: 'demo', type } satisfies LinkPurpose)); } catch { /* ignore */ }
+    startEmailDemo: async (email, type) => {
+      setError(null);
+      const mail = email.trim().toLowerCase();
+      if (!EMAIL_RE.test(mail)) throw new Error('Type a valid email address, like name@school.co.zw.');
+      if (isOwnerEmail(mail)) throw new Error('That’s a Musa OS owner email — use Owner sign-in instead.');
+      const { auth, db } = getFirebase();
+      busy.current = true;
+      try {
+        // this browser may already hold the demo for this email
+        const current = auth.currentUser;
+        if (current?.isAnonymous) {
+          const mine = await getDoc(doc(db, 'users', current.uid)).catch(() => null);
+          if (mine?.exists() && (mine.data() as UserProfile).email === mail) { await resolveAccount(current); setReady(true); return; }
+          await signOut(auth).catch(() => {});
+        }
+        const user = (await signInAnonymously(auth)).user;
+        const used = await getDoc(doc(db, 'demoEmails', mail)).catch(() => null);
+        if (used?.exists()) {
+          const d = used.data() as { uid: string; demoExpiresAt?: number };
+          await user.delete().catch(() => signOut(auth));
+          throw new Error(Date.now() < Number(d.demoExpiresAt ?? 0)
+            ? 'This email already has a demo running. Open it in the browser you started it in.'
+            : 'The one-day demo for this email has ended. To keep using Musa OS, sign up your school.');
+        }
+        try { localStorage.removeItem('musa-tour'); } catch { /* ignore */ }
+        await createDemo(user, type, mail);
+        await resolveAccount(user);
+        setReady(true);
+      } finally {
+        busy.current = false;
+      }
     },
 
-    sendOwnerLink: async (email) => {
-      const mail = email.trim();
-      if (!isOwnerEmail(mail)) throw new Error('That email isn’t one of the Musa OS owners.');
+    ownerSignIn: async () => {
+      setError(null);
       const { auth } = getFirebase();
-      await sendSignInLinkToEmail(auth, mail, { url: linkUrl(), handleCodeInApp: true });
-      try { localStorage.setItem(LINK_KEY, JSON.stringify({ email: mail, purpose: 'owner' } satisfies LinkPurpose)); } catch { /* ignore */ }
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
+      busy.current = true;
+      try {
+        let user: User;
+        try { user = (await signInWithPopup(auth, provider)).user; }
+        catch (e: any) {
+          if (e?.code === 'auth/popup-blocked') { await signInWithRedirect(auth, provider); return; }
+          throw e;
+        }
+        if (!isOwnerEmail(user.email)) {
+          await signOut(auth).catch(() => {});
+          throw new Error('That Google account isn’t one of the Musa OS owners.');
+        }
+        clearAll(); setOwner(user); setReady(true);
+      } finally {
+        busy.current = false;
+      }
     },
-
-    finishEmailLink: (email, type) => completeLink(email, type),
 
     startDemo: async (type) => {
       setError(null);
@@ -482,7 +491,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try { localStorage.removeItem('musa-tour'); } catch { /* ignore */ }
     },
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [ready, mode, profile, error, pending, application, locked, owner, linkNeedsEmail]);
+  }), [ready, mode, profile, error, pending, application, locked, owner]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 };

@@ -65,3 +65,13 @@ The previous repository committed a Firebase config and a Make.com webhook URL w
 React 19 · TypeScript · Vite · Tailwind CSS 4 · Firebase 12 · Recharts · @google/genai · lucide-react
 
 Developer conventions: `docs/DEV_CONVENTIONS.md`.
+
+## Sign-in (no emails are sent)
+
+In the Firebase console → Authentication → Sign-in method, turn on:
+
+- **Email/Password** — schools, staff and families sign in with these.
+- **Anonymous** — the one-day demo. A visitor types their email and the demo opens at once; the
+  email is recorded in `demoEmails` so each email gets one demo. The demo lives in that browser.
+  Choosing "Keep this as my real school" adds a password, so the school can be opened anywhere.
+- **Google** — the owners' console (`/owner`), for the owner emails in `src/lib/owner.ts`.
